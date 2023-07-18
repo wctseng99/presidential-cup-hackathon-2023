@@ -1,14 +1,16 @@
+# Nie, Qingyun, Lihui Zhang, and Songrui Li.
+#   "How can personal carbon trading be applied in electric vehicle subsidies?
+#   A Stackelberg game method in private vehicles." Applied Energy 313 (2022): 118855.
+#
+# https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914
+
 import sympy as sp
 
 from app.modules.base import Module
 
 
 class VehicleSubsidyModule(Module):
-    # Nie, Qingyun, Lihui Zhang, and Songrui Li. "How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles." Applied Energy 313 (2022): 118855.
-    # https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914
-
     def __init__(self):
-        # external parameters
         d = sp.Symbol("d")
         f_e = sp.Symbol("f_e")
         f_f = sp.Symbol("f_f")
@@ -36,7 +38,6 @@ class VehicleSubsidyModule(Module):
         N_c = sp.Symbol("N_c")
         ΔN_v = sp.Symbol("ΔN_v")
 
-        # internel parameters
         ρ_c = sp.Symbol("ρ_c")
 
         # Equation 1
@@ -171,6 +172,36 @@ class VehicleSubsidyModule(Module):
         self.CER = CER
         self.δ = δ
 
+    def inputs(self) -> dict[str, sp.Basic]:
+        return {
+            "d": self.d,
+            "f_e": self.f_e,
+            "f_f": self.f_f,
+            "ρ_e": self.ρ_e,
+            "ρ_f": self.ρ_f,
+            "M_e": self.M_e,
+            "M_f": self.M_f,
+            "e": self.e,
+            "Q": self.Q,
+            "T": self.T,
+            "F_e": self.F_e,
+            "F_f": self.F_f,
+            "I_e": self.I_e,
+            "C": self.C,
+            "k": self.k,
+            "i_e": self.i_e,
+            "i_f": self.i_f,
+            "ε": self.ε,
+            "θ": self.θ,
+            "β_1": self.β_1,
+            "β_2": self.β_2,
+            "β_3": self.β_3,
+            "λ_1": self.λ_1,
+            "λ_2": self.λ_2,
+            "N_c": self.N_c,
+            "ΔN_v": self.ΔN_v,
+        }
+
     def outputs(self) -> dict[str, sp.Basic]:
         return {
             "ρ_c": self.ρ_c,
@@ -205,20 +236,22 @@ class VehicleSubsidyModule(Module):
             "δ": self.δ,
         }
 
-    def forward(self, inputs: dict[str, float]) -> sp.Basic:
-        sym_inputs: dict[sp.Basic, sp.Basic] = {
-            getattr(self, k): v for k, v in inputs.items()
+    def forward(self, input_vals: dict[str, float]) -> dict[str, sp.Basic]:
+        inputs: dict[sp.Basic, float | sp.Basic] = {
+            getattr(self, k): v for k, v in input_vals.items()
         }
 
         # find the leader solution to the stackelberg game
         ρ_c: list[sp.Basic] = sp.solve(
-            sp.diff(self.U_G, self.ρ_c).subs(sym_inputs), self.ρ_c
+            sp.diff(self.U_G, self.ρ_c).subs(inputs), self.ρ_c
         )
 
         if len(ρ_c) != 1:
             raise ValueError("Expected one solution for ρ_c")
 
-        sym_inputs.update({self.ρ_c: ρ_c[0]})
+        inputs.update({self.ρ_c: ρ_c[0]})
 
         # unroll the follower solutions
-        return self.subs(self.outputs(), sym_inputs)
+        output_vals: dict[str, sp.Basic] = self.subs(self.outputs(), inputs)
+
+        return output_vals
