@@ -1,0 +1,46 @@
+repos:
+- hooks:
+  - id: end-of-file-fixer
+  - id: trailing-whitespace
+  repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.4.0
+
+- hooks:
+  - args:
+    - --in-place
+    - --remove-all-unused-imports
+    - --expand-star-imports
+    - --remove-duplicate-keys
+    - --remove-unused-variables
+    exclude: .*/__init__.py
+    id: autoflake
+  repo: https://github.com/myint/autoflake
+  rev: v2.2.0
+
+- hooks:
+  - args:
+    - --profile
+    - black
+    id: isort
+  repo: https://github.com/pre-commit/mirrors-isort
+  rev: v5.10.1
+- hooks:
+  - id: black
+  repo: https://github.com/psf/black
+  rev: 23.7.0
+- hooks:
+  - entry: mypy
+    id: mypy
+    language: system
+    name: mypy
+    types_or:
+    - python
+    - pyi
+  repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.4.1
+- hooks:
+  - id: commitizen
+    stages:
+    - commit-msg
+  repo: https://github.com/commitizen-tools/commitizen
+  rev: 3.5.3

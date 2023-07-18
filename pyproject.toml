@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "presidential-cup-2023"
+version = "0.1.0"
+description = ""
+authors = ["Harry Hsu <h@codegreen.org>"]
+readme = "README.md"
+packages = [{include = "presidential_cup_2023"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+sympy = "^1.12"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
