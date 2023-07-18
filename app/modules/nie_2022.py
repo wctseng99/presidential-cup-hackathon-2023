@@ -1,25 +1,9 @@
-from typing import Any
-
 import sympy as sp
 
-
-class Module(object):
-    def subs(self, value: Any, *args: Any, **kwargs: Any) -> Any:
-        if isinstance(value, sp.Basic):
-            return value.subs(*args, **kwargs)
-
-        if isinstance(value, list):
-            return [self.subs(_value, *args, **kwargs) for _value in value]
-
-        if isinstance(value, dict):
-            return {
-                key: self.subs(_value, *args, **kwargs) for key, _value in value.items()
-            }
-
-        raise NotImplementedError
+from app.modules.base import Module
 
 
-class PrivateVehicleModule(Module):
+class VehicleSubsidyModule(Module):
     # Nie, Qingyun, Lihui Zhang, and Songrui Li. "How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles." Applied Energy 313 (2022): 118855.
     # https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914
 
@@ -130,7 +114,6 @@ class PrivateVehicleModule(Module):
         δ = CER / TS
 
         self.d = d
-        self.e = e
         self.f_e = f_e
         self.f_f = f_f
         self.ρ_e = ρ_e
@@ -156,8 +139,8 @@ class PrivateVehicleModule(Module):
         self.λ_2 = λ_2
         self.N_c = N_c
         self.ΔN_v = ΔN_v
-        self.ρ_c = ρ_c
 
+        self.ρ_c = ρ_c
         self.S_e = S_e
         self.S_f = S_f
         self.l = l
@@ -188,7 +171,7 @@ class PrivateVehicleModule(Module):
         self.CER = CER
         self.δ = δ
 
-    def to_dict(self) -> dict[str, sp.Basic]:
+    def outputs(self) -> dict[str, sp.Basic]:
         return {
             "ρ_c": self.ρ_c,
             "S_e": self.S_e,
@@ -222,12 +205,18 @@ class PrivateVehicleModule(Module):
             "δ": self.δ,
         }
 
-    def solve(self, params: dict[sp.Basic, float]) -> sp.Basic:
-        solutions: list[sp.Basic] = sp.solve(
-            sp.diff(self.U_G, self.ρ_c).subs(params), self.ρ_c
+    def forward(self, inputs: dict[str, float]) -> sp.Basic:
+        inputs = {getattr(self, k): v for k, v in inputs.items()}
+
+        # find the leader solution to the stackelberg game
+        ρ_c: list[sp.Basic] = sp.solve(
+            sp.diff(self.U_G, self.ρ_c).subs(inputs), self.ρ_c
         )
 
-        if len(solutions) != 1:
+        if len(ρ_c) != 1:
             raise ValueError("Expected one solution for ρ_c")
 
-        return solutions[0]
+        inputs.update({self.ρ_c: ρ_c[0]})
+
+        # unroll the follower solutions
+        return self.subs(self.outputs(), inputs)
