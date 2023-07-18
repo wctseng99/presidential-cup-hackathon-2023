@@ -206,17 +206,19 @@ class VehicleSubsidyModule(Module):
         }
 
     def forward(self, inputs: dict[str, float]) -> sp.Basic:
-        inputs = {getattr(self, k): v for k, v in inputs.items()}
+        sym_inputs: dict[sp.Basic, sp.Basic] = {
+            getattr(self, k): v for k, v in inputs.items()
+        }
 
         # find the leader solution to the stackelberg game
         ρ_c: list[sp.Basic] = sp.solve(
-            sp.diff(self.U_G, self.ρ_c).subs(inputs), self.ρ_c
+            sp.diff(self.U_G, self.ρ_c).subs(sym_inputs), self.ρ_c
         )
 
         if len(ρ_c) != 1:
             raise ValueError("Expected one solution for ρ_c")
 
-        inputs.update({self.ρ_c: ρ_c[0]})
+        sym_inputs.update({self.ρ_c: ρ_c[0]})
 
         # unroll the follower solutions
-        return self.subs(self.outputs(), inputs)
+        return self.subs(self.outputs(), sym_inputs)
