@@ -7,7 +7,7 @@ import seaborn.objects as so
 from absl import app, flags
 
 from app.data import VehicleType, get_vehicle_ownership_data
-from app.modules import CarOwnershipModule, VehicleSubsidyModule
+from app.modules import CarOwnershipModule, ScooterOwnershipModule, VehicleSubsidyModule
 
 flags.DEFINE_string("data_dir", "./data", "Directory for data.")
 FLAGS = flags.FLAGS
@@ -73,9 +73,51 @@ def car_ownership_probability_function():
         .plot()
     )
     fig.tight_layout()
-    fig.savefig("2.2.3.pdf")
+    fig.savefig("2-2-3-car.pdf")
 
     module = CarOwnershipModule()
+    module.fit(
+        income=df_agg.income_adjusted.values,
+        ownership=df_agg.vehicle_ownership_adjusted.values,
+        bootstrap=False,
+    )
+
+    input_values: dict[str, float] = {
+        "income": 1_000_000,
+    }
+
+    output_values = module.forward(input_values)
+    pprint.pprint(output_values)
+
+
+def scooter_ownership_probability_function():
+    df: pd.DataFrame = get_vehicle_ownership_data(
+        FLAGS.data_dir, vehicle_type=VehicleType.SCOOTER
+    )
+    income_bin: pd.Series = (
+        df.income.rank(pct=True).mul(100).astype(int).rename("income_bin")
+    )
+    df_agg = df.groupby(income_bin).agg(
+        {"income_adjusted": np.mean, "vehicle_ownership_adjusted": np.mean}
+    )
+
+    fig = plt.Figure(figsize=(6, 4))
+    (
+        so.Plot(
+            df_agg,
+            x="income_adjusted",
+            y="vehicle_ownership_adjusted",
+        )
+        .add(so.Dot())
+        .limit(x=(0, 2e6), y=(0.3, 0.7))
+        .label(x="Income", y="Vehicle Ownership")
+        .on(fig)
+        .plot()
+    )
+    fig.tight_layout()
+    fig.savefig("2-2-3-scooter.pdf")
+
+    module = ScooterOwnershipModule()
     module.fit(
         income=df_agg.income_adjusted.values,
         ownership=df_agg.vehicle_ownership_adjusted.values,
@@ -93,6 +135,7 @@ def car_ownership_probability_function():
 def main(_):
     vehicle_subsidy()
     car_ownership_probability_function()
+    scooter_ownership_probability_function()
 
 
 if __name__ == "__main__":

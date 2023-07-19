@@ -76,14 +76,56 @@ class CarOwnershipModule(FittableModule):
         }
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+        income_in_millions: np.ndarray = income / 1_000_000
+
         popt, _ = scipy.optimize.curve_fit(
             sp.lambdify(
                 [self.income, self.gamma, self.alpha, self.beta], self.ownership
             ),
-            income,
+            income_in_millions,
             ownership,
-            p0=[np.max(ownership), -2, -2 / 1_000_000],
+            p0=[np.max(ownership), -2, -2],
         )
         gamma, alpha, beta = popt
 
-        return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
+        return {self.gamma: gamma, self.alpha: alpha, self.beta: beta / 1_000_000}
+
+
+class ScooterOwnershipModule(FittableModule):
+    def __init__(self):
+        income = sp.Symbol("income")
+        alpha = sp.Symbol("alpha")
+        beta = sp.Symbol("beta")
+        C = sp.Symbol("C")
+
+        ownership = (
+            (beta**alpha) * (income ** (alpha - 1)) * sp.exp(-beta * income)
+        ) / sp.gamma(alpha) + C
+
+        self.income = income
+        self.alpha = alpha
+        self.beta = beta
+        self.C = C
+
+        self.ownership = ownership
+
+    def output_symbols(self) -> dict[str, sp.Basic]:
+        return {
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "C": self.C,
+            "ownership": self.ownership,
+        }
+
+    def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+        income_in_millions: np.ndarray = income / 1_000_000
+
+        popt, _ = scipy.optimize.curve_fit(
+            sp.lambdify([self.income, self.alpha, self.beta, self.C], self.ownership),
+            income_in_millions,
+            ownership,
+            p0=[1.5, 1, 0.1],
+        )
+        alpha, beta, C = popt
+
+        return {self.alpha: alpha, self.beta: beta / 1_000_000, self.C: C}

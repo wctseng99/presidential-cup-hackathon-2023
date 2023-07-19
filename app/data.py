@@ -51,21 +51,35 @@ def get_vehicle_stock_adjustment_data(
     vehicle_type: VehicleType,
     extrapolate_years: Iterable[int] | None = None,
 ) -> pd.DataFrame:
-    if vehicle_type == VehicleType.CAR:
-        years = [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
-        stock_adjustments = [
-            0.2104,
-            0.2164,
-            0.2145,
-            0.2164,
-            0.2238,
-            0.2298,
-            0.2353,
-            0.2369,
-            0.2389,
-        ]
-    else:
-        raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+    match vehicle_type:
+        case VehicleType.CAR:
+            years = [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
+            stock_adjustments = [
+                0.2104,
+                0.2164,
+                0.2145,
+                0.2164,
+                0.2238,
+                0.2298,
+                0.2353,
+                0.2369,
+                0.2389,
+            ]
+        case VehicleType.SCOOTER:
+            years = [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
+            stock_adjustments = [
+                0.4447,
+                0.4533,
+                0.4648,
+                0.4721,
+                0.4816,
+                0.4873,
+                0.4982,
+                0.5013,
+                0.5091,
+            ]
+        case _:
+            raise ValueError(f"Invalid vehicle type: {vehicle_type}")
 
     if extrapolate_years is not None:
         fn: Callable = lambda v, a, b: a + b * v
