@@ -13,12 +13,39 @@ import sympy.stats
 from app.modules.base import FittableModule, Module
 
 
-# Section 2.2.2: Disposable Income Distribution
-class DisposableIncomeMeanModule(Module):
+# Section 2.2.1: Stock and Sales
+class VehicleSurvivalRateModule(FittableModule):
     def __init__(self):
-        pass
+        age = sp.Symbol("age")
+        a = sp.Symbol("a")
+        b = sp.Symbol("b")
+
+        survival_rate = 1 / (1 + a * sp.exp(b * age))
+
+        self.age = age
+        self.a = a
+        self.b = b
+
+        self.survival_rate = survival_rate
+
+    def output_symbols(self) -> dict[str, sp.Basic]:
+        return {
+            "a": self.a,
+            "b": self.b,
+            "survival_rate": self.survival_rate,
+        }
+
+    def _fit(self, age: np.ndarray, survival_rate: np.ndarray) -> dict[sp.Symbol, float]:  # type: ignore
+        (a, b), _ = scipy.optimize.curve_fit(
+            sp.lambdify([self.age, self.a, self.b], self.survival_rate),
+            age,
+            survival_rate,
+            p0=[0.005, 0.5],
+        )
+        return {"a": a, "b": b}
 
 
+# Section 2.2.2: Disposable Income Distribution
 class DisposableIncomeDistributionModule(Module):
     def __init__(self):
         income = sp.Symbol("income")
@@ -78,7 +105,7 @@ class CarOwnershipModule(FittableModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        popt, _ = scipy.optimize.curve_fit(
+        (gamma, alpha, beta), _ = scipy.optimize.curve_fit(
             sp.lambdify(
                 [self.income, self.gamma, self.alpha, self.beta], self.ownership
             ),
@@ -86,8 +113,6 @@ class CarOwnershipModule(FittableModule):
             ownership,
             p0=[np.max(ownership), -2, -2],
         )
-        gamma, alpha, beta = popt
-
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta / 1_000_000}
 
 
@@ -120,12 +145,10 @@ class ScooterOwnershipModule(FittableModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        popt, _ = scipy.optimize.curve_fit(
+        (alpha, beta, C), _ = scipy.optimize.curve_fit(
             sp.lambdify([self.income, self.alpha, self.beta, self.C], self.ownership),
             income_in_millions,
             ownership,
             p0=[1.5, 1, 0.1],
         )
-        alpha, beta, C = popt
-
         return {self.alpha: alpha, self.beta: beta / 1_000_000, self.C: C}

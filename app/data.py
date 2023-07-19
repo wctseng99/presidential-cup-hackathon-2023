@@ -36,6 +36,26 @@ def get_population_data(data_dir: Path) -> pd.DataFrame:
     return df
 
 
+def get_vehicle_survival_rate_data(
+    data_dir: Path, vehicle_type: VehicleType
+) -> pd.DataFrame:
+    vehicle: str = vehicle_type.value.lower()
+    csv_path: Path = Path(data_dir, "survival_rate_original.csv")
+    df = pd.read_csv(csv_path)
+
+    if vehicle_type in [
+        VehicleType.CAR,
+        VehicleType.SCOOTER,
+        VehicleType.OPERATING_CAR,
+    ]:
+        columns: list[str] = ["age", vehicle]
+    else:
+        raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+
+    df = df[columns].rename({vehicle: f"survival_rate"}, axis=1)
+    return df
+
+
 def get_vehicle_stock_data(data_dir: Path, vehicle_type: VehicleType) -> pd.DataFrame:
     vehicle: str = vehicle_type.value.lower()
     csv_path: Path = Path(data_dir, "stock", f"stock_{vehicle}.csv")
@@ -120,8 +140,7 @@ def get_vehicle_ownership_data(
     else:
         raise ValueError(f"Invalid vehicle type: {vehicle_type}")
 
-    df = df[columns]
-    df = df.rename({vehicle: f"vehicle_ownership"}, axis=1).dropna()
+    df = df[columns].rename({vehicle: f"vehicle_ownership"}, axis=1).dropna()
 
     # income adjustment
 

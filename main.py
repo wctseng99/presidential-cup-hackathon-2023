@@ -6,8 +6,17 @@ import pandas as pd
 import seaborn.objects as so
 from absl import app, flags
 
-from app.data import VehicleType, get_vehicle_ownership_data
-from app.modules import CarOwnershipModule, ScooterOwnershipModule, VehicleSubsidyModule
+from app.data import (
+    VehicleType,
+    get_vehicle_ownership_data,
+    get_vehicle_survival_rate_data,
+)
+from app.modules import (
+    CarOwnershipModule,
+    ScooterOwnershipModule,
+    VehicleSubsidyModule,
+    VehicleSurvivalRateModule,
+)
 
 flags.DEFINE_string("data_dir", "./data", "Directory for data.")
 FLAGS = flags.FLAGS
@@ -48,7 +57,26 @@ def vehicle_subsidy():
     pprint.pprint(output_values)
 
 
-def car_ownership_probability_function():
+def vehicle_survival_rate():
+    for vehicle_type in [
+        VehicleType.CAR,
+        VehicleType.SCOOTER,
+        VehicleType.OPERATING_CAR,
+    ]:
+        df: pd.DataFrame = get_vehicle_survival_rate_data(
+            FLAGS.data_dir, vehicle_type=vehicle_type
+        )
+        module = VehicleSurvivalRateModule()
+        module.fit(
+            age=df.age.values, survival_rate=df.survival_rate.values, bootstrap=False
+        )
+
+        input_values: dict[str, float] = {"age": 10}
+        output_values = module.forward(input_values)
+        pprint.pprint(output_values)
+
+
+def car_ownership():
     df: pd.DataFrame = get_vehicle_ownership_data(
         FLAGS.data_dir, vehicle_type=VehicleType.CAR
     )
@@ -90,7 +118,7 @@ def car_ownership_probability_function():
     pprint.pprint(output_values)
 
 
-def scooter_ownership_probability_function():
+def scooter_ownership():
     df: pd.DataFrame = get_vehicle_ownership_data(
         FLAGS.data_dir, vehicle_type=VehicleType.SCOOTER
     )
@@ -133,9 +161,10 @@ def scooter_ownership_probability_function():
 
 
 def main(_):
-    vehicle_subsidy()
-    car_ownership_probability_function()
-    scooter_ownership_probability_function()
+    # vehicle_subsidy()
+    vehicle_survival_rate()
+    # car_ownership()
+    # scooter_ownership()
 
 
 if __name__ == "__main__":
