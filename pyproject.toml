@@ -6,8 +6,13 @@ authors = ["Harry Hsu <h@codegreen.org>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.11, <3.13"
 sympy = "^1.12"
+scipy = "^1.11.1"
+absl-py = "^1.4.0"
+pandas = "^2.0.3"
+seaborn = "^0.12.2"
+matplotlib = "^3.7.2"
 
 [tool.pyright]
 include = ["app"]

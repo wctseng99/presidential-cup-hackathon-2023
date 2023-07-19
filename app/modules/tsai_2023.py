@@ -1,0 +1,89 @@
+# Tsai, Chia-Yu, Tsung-Heng Chang, and I-Yun Lisa Hsieh.
+#   "Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport."
+#   Transportation Research Part D: Transport and Environment 114 (2023): 103542.
+#
+# https://www.sciencedirect.com/science/article/pii/S1361920922003686
+
+
+import numpy as np
+import scipy.optimize
+import sympy as sp
+import sympy.stats
+
+from app.modules.base import FittableModule, Module
+
+
+# Section 2.2.2: Disposable Income Distribution
+class DisposableIncomeMeanModule(Module):
+    def __init__(self):
+        pass
+
+
+class DisposableIncomeDistributionModule(Module):
+    def __init__(self):
+        income = sp.Symbol("income")
+        gini_coefficient = sp.Symbol("gini_coefficient")
+
+        beta = 1 / gini_coefficient
+        alpha = income * sp.sin(sp.pi / beta) / (sp.pi / beta)
+
+        x = sp.Symbol("x")
+        income_rv = sympy.stats.ContinuousRV(
+            x,
+            (beta / alpha) * (x / alpha) ** (beta - 1) / (1 + (x / alpha) ** beta) ** 2,
+            set=sp.Interval(0, sp.oo),
+        )
+
+        self.income = income
+        self.gini_coefficient = gini_coefficient
+
+        self.beta = beta
+        self.alpha = alpha
+        self.income_rv = income_rv
+
+    def output_symbols(self) -> dict[str, sp.Basic]:
+        return {
+            "income": self.income,
+            "beta": self.beta,
+            "alpha": self.alpha,
+            "income_rv": self.income_rv,
+        }
+
+
+# Section 2.2.3: Ownership Probability Function
+class CarOwnershipModule(FittableModule):
+    def __init__(self):
+        income = sp.Symbol("income")
+        gamma = sp.Symbol("gamma")
+        alpha = sp.Symbol("alpha")
+        beta = sp.Symbol("beta")
+
+        ownership = gamma * sp.exp(alpha * sp.exp(beta * income))
+
+        self.income = income
+        self.gamma = gamma
+        self.alpha = alpha
+        self.beta = beta
+
+        self.ownership = ownership
+
+    def output_symbols(self) -> dict[str, sp.Basic]:
+        return {
+            "gamma": self.gamma,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "ownership": self.ownership,
+        }
+
+    def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+        popt, _ = scipy.optimize.curve_fit(
+            sp.lambdify(
+                [self.income, self.gamma, self.alpha, self.beta], self.ownership
+            ),
+            income,
+            ownership,
+            p0=[np.max(ownership), -2, -2 / 1_000_000],
+        )
+        gamma, alpha, beta = popt
+
+        return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
