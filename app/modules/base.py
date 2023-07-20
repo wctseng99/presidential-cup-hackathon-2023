@@ -64,7 +64,7 @@ class FittableModule(Module):
         )
 
     def __init__(self):
-        self._param_symbol_values: dict[sp.Basic, float] | None = None
+        self.param_symbol_values: dict[sp.Basic, float] | None = None
 
     @abc.abstractmethod
     def _fit(self, *args: Any, **kwargs: Any) -> dict[sp.Basic, float]:
