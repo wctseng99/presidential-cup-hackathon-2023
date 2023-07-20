@@ -42,37 +42,45 @@ class VehicleSurvivalRateModule(FittableModule):
             survival_rate,
             p0=[0.005, 0.5],
         )
-        return {"a": a, "b": b}
+        return {self.a: a, self.b: b}
+
+
+class VehicleSalesModule(Module):
+    def __init__(self):
+        pass
 
 
 # Section 2.2.2: Disposable Income Distribution
 class DisposableIncomeDistributionModule(Module):
     def __init__(self):
         income = sp.Symbol("income")
-        gini_coefficient = sp.Symbol("gini_coefficient")
+        gini_index = sp.Symbol("gini_index")
 
-        beta = 1 / gini_coefficient
+        beta = 1 / gini_index
         alpha = income * sp.sin(sp.pi / beta) / (sp.pi / beta)
 
-        x = sp.Symbol("x")
+        income_pdf = (
+            (beta / alpha)
+            * (income / alpha) ** (beta - 1)
+            / (1 + (income / alpha) ** beta) ** 2
+        )
         income_rv = sympy.stats.ContinuousRV(
-            x,
-            (beta / alpha) * (x / alpha) ** (beta - 1) / (1 + (x / alpha) ** beta) ** 2,
-            set=sp.Interval(0, sp.oo),
+            income, income_pdf, set=sp.Interval(0, sp.oo)
         )
 
         self.income = income
-        self.gini_coefficient = gini_coefficient
+        self.gini_index = gini_index
 
         self.beta = beta
         self.alpha = alpha
+        self.income_pdf = income_pdf
         self.income_rv = income_rv
 
     def output_symbols(self) -> dict[str, sp.Basic]:
         return {
-            "income": self.income,
             "beta": self.beta,
             "alpha": self.alpha,
+            "income_pdf": self.income_pdf,
             "income_rv": self.income_rv,
         }
 

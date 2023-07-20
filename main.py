@@ -9,7 +9,7 @@ from absl import app, flags
 from app.data import (
     VehicleType,
     get_vehicle_ownership_data,
-    get_vehicle_survival_rate_data,
+    get_vehicle_survival_rate_series,
 )
 from app.modules import (
     CarOwnershipModule,
@@ -63,108 +63,75 @@ def vehicle_survival_rate():
         VehicleType.SCOOTER,
         VehicleType.OPERATING_CAR,
     ]:
-        df: pd.DataFrame = get_vehicle_survival_rate_data(
+        s: pd.Series = get_vehicle_survival_rate_series(
             FLAGS.data_dir, vehicle_type=vehicle_type
         )
         module = VehicleSurvivalRateModule()
-        module.fit(
-            age=df.age.values, survival_rate=df.survival_rate.values, bootstrap=False
-        )
+        module.fit(age=s.index.values, survival_rate=s.values, bootstrap=False)
 
         input_values: dict[str, float] = {"age": 10}
         output_values = module.forward(input_values)
         pprint.pprint(output_values)
 
 
-def car_ownership():
-    df: pd.DataFrame = get_vehicle_ownership_data(
-        FLAGS.data_dir, vehicle_type=VehicleType.CAR
-    )
-    income_bin: pd.Series = (
-        df.income.rank(pct=True).mul(100).astype(int).rename("income_bin")
-    )
-    df_agg = df.groupby(income_bin).agg(
-        {"income_adjusted": np.mean, "vehicle_ownership_adjusted": np.mean}
-    )
+def vehicle_ownership():
+    for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
+        vehicle: str = vehicle_type.value.lower()
 
-    fig = plt.Figure(figsize=(6, 4))
-    (
-        so.Plot(
-            df_agg,
-            x="income_adjusted",
-            y="vehicle_ownership_adjusted",
+        df: pd.DataFrame = get_vehicle_ownership_data(
+            FLAGS.data_dir, vehicle_type=vehicle_type
         )
-        .add(so.Dot())
-        .limit(x=(0, 2e6), y=(0.1, 0.65))
-        .label(x="Income", y="Vehicle Ownership")
-        .on(fig)
-        .plot()
-    )
-    fig.tight_layout()
-    fig.savefig("2-2-3-car.pdf")
-
-    module = CarOwnershipModule()
-    module.fit(
-        income=df_agg.income_adjusted.values,
-        ownership=df_agg.vehicle_ownership_adjusted.values,
-        bootstrap=False,
-    )
-
-    input_values: dict[str, float] = {
-        "income": 1_000_000,
-    }
-
-    output_values = module.forward(input_values)
-    pprint.pprint(output_values)
-
-
-def scooter_ownership():
-    df: pd.DataFrame = get_vehicle_ownership_data(
-        FLAGS.data_dir, vehicle_type=VehicleType.SCOOTER
-    )
-    income_bin: pd.Series = (
-        df.income.rank(pct=True).mul(100).astype(int).rename("income_bin")
-    )
-    df_agg = df.groupby(income_bin).agg(
-        {"income_adjusted": np.mean, "vehicle_ownership_adjusted": np.mean}
-    )
-
-    fig = plt.Figure(figsize=(6, 4))
-    (
-        so.Plot(
-            df_agg,
-            x="income_adjusted",
-            y="vehicle_ownership_adjusted",
+        income_bin: pd.Series = (
+            df.adjusted_income.rank(pct=True).mul(100).astype(int).rename("income_bin")
         )
-        .add(so.Dot())
-        .limit(x=(0, 2e6), y=(0.3, 0.7))
-        .label(x="Income", y="Vehicle Ownership")
-        .on(fig)
-        .plot()
-    )
-    fig.tight_layout()
-    fig.savefig("2-2-3-scooter.pdf")
+        df_agg = df.groupby(income_bin).agg(
+            {"adjusted_income": np.mean, "adjusted_vehicle_ownership": np.mean}
+        )
 
-    module = ScooterOwnershipModule()
-    module.fit(
-        income=df_agg.income_adjusted.values,
-        ownership=df_agg.vehicle_ownership_adjusted.values,
-        bootstrap=False,
-    )
+        if vehicle_type == VehicleType.CAR:
+            ylim = (0.1, 0.65)
+        elif vehicle_type == VehicleType.SCOOTER:
+            ylim = (0.3, 0.7)
 
-    input_values: dict[str, float] = {
-        "income": 1_000_000,
-    }
+        fig = plt.Figure(figsize=(6, 4))
+        (
+            so.Plot(
+                df_agg,
+                x="adjusted_income",
+                y="adjusted_vehicle_ownership",
+            )
+            .add(so.Dot())
+            .limit(x=(0, 2e6), y=ylim)
+            .label(x="Income", y=f"{vehicle.title()} Ownership")
+            .on(fig)
+            .plot()
+        )
+        fig.tight_layout()
+        fig.savefig(f"2-2-3-{vehicle}.pdf")
 
-    output_values = module.forward(input_values)
-    pprint.pprint(output_values)
+        if vehicle_type == VehicleType.CAR:
+            module = CarOwnershipModule()
+        else:
+            module = ScooterOwnershipModule()
+
+        module.fit(
+            income=df_agg.adjusted_income.values,
+            ownership=df_agg.adjusted_vehicle_ownership.values,
+            bootstrap=False,
+        )
+
+        input_values: dict[str, float] = {
+            "income": 1_000_000,
+        }
+
+        output_values = module.forward(input_values)
+        pprint.pprint(output_values)
 
 
 def main(_):
-    # vehicle_subsidy()
+    vehicle_subsidy()
     vehicle_survival_rate()
-    # car_ownership()
-    # scooter_ownership()
+    vehicle_ownership()
 
 
 if __name__ == "__main__":
