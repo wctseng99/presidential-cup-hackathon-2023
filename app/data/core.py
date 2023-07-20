@@ -194,8 +194,9 @@ def get_income_dataframe(
     )
 
     df: pd.DataFrame = pd.concat([s_income, s_gini, s_deflation], axis=1).sort_index()
-    if extrapolate_index is None:
-        df = df.dropna()
+    df = df.dropna()
+
+    df["adjusted_income"] = s_income / (s_deflation / 100)
 
     return df
 

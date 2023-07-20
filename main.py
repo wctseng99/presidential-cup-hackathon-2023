@@ -1,19 +1,26 @@
 import pprint
+from collections.abc import Iterable
 from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn.objects as so
-from absl import app, flags
+import sympy as sp
+import sympy.stats as sps
+from absl import app, flags, logging
 
 from app.data import (
     VehicleType,
+    get_income_dataframe,
+    get_population_series,
     get_vehicle_ownership_data,
+    get_vehicle_stock_series,
     get_vehicle_survival_rate_series,
 )
 from app.modules import (
     CarOwnershipModule,
+    IncomeDistributionModule,
     ScooterOwnershipModule,
     VehicleSubsidyModule,
     VehicleSurvivalRateModule,
@@ -24,6 +31,8 @@ FLAGS = flags.FLAGS
 
 
 def vehicle_subsidy():
+    logging.info("Running vehicle subsidy experiment.")
+
     module = VehicleSubsidyModule()
 
     input_values: dict[str, float] = {
@@ -55,10 +64,12 @@ def vehicle_subsidy():
     }
 
     output_values = module.forward(input_values)
-    pprint.pprint(output_values)
+    logging.info(f"Output values: {pprint.pformat(output_values)}")
 
 
 def vehicle_survival_rate_experiment():
+    logging.info("Running vehicle survival rate experiment.")
+
     objs: list[Any] = []
 
     for vehicle_type in [
@@ -89,7 +100,7 @@ def vehicle_survival_rate_experiment():
 
     df_plot: pd.DataFrame = pd.DataFrame(objs)
 
-    (fig, ax) = plt.subplots(1, 1, figsize=(6, 4))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     (
         so.Plot(df_plot, x="age", y="survival_rate", color="vehicle")
         .add(so.Dot())
@@ -107,17 +118,13 @@ def vehicle_survival_rate_experiment():
 
 
 def vehicle_ownership_experiment():
+    logging.info("Running vehicle ownership experiment.")
+
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
         vehicle: str = vehicle_type.value.lower()
 
         df: pd.DataFrame = get_vehicle_ownership_data(
-            FLAGS.data_dir, vehicle_type=vehicle_type
-        )
-        income_bin: pd.Series = (
-            df.adjusted_income.rank(pct=True).mul(100).astype(int).rename("income_bin")
-        )
-        df_agg = df.groupby(income_bin).agg(
-            {"adjusted_income": np.mean, "adjusted_vehicle_ownership": np.mean}
+            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=100
         )
 
         if vehicle_type == VehicleType.CAR:
@@ -128,7 +135,7 @@ def vehicle_ownership_experiment():
         fig = plt.Figure(figsize=(6, 4))
         (
             so.Plot(
-                df_agg,
+                df,
                 x="adjusted_income",
                 y="adjusted_vehicle_ownership",
             )
@@ -147,23 +154,76 @@ def vehicle_ownership_experiment():
             module = ScooterOwnershipModule()
 
         module.fit(
-            income=df_agg.adjusted_income.values,
-            ownership=df_agg.adjusted_vehicle_ownership.values,
+            income=df.iloc[1:-1].adjusted_income.values,
+            ownership=df.iloc[1:-1].adjusted_vehicle_ownership.values,
             bootstrap=False,
         )
+        logging.info(module.param_symbol_values)
 
-        input_values: dict[str, float] = {
-            "income": 1_000_000,
-        }
 
-        output_values = module.forward(input_values)
-        pprint.pprint(output_values)
+def vehicle_stock_experiment(
+    income_bins_total: int = 100,
+    income_bins_removed: int = 1,
+    rv_expectation_samples: int = 1000,
+):
+    logging.info("Running vehicle stock experiment.")
+
+    s_population: pd.Series = get_population_series(FLAGS.data_dir)
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
+        FLAGS.data_dir, vehicle_type=VehicleType.CAR
+    )
+
+    df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
+    df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_data(
+        FLAGS.data_dir, vehicle_type=VehicleType.CAR, income_bins=income_bins_total
+    )
+    df_vehicle_ownership_for_fit: pd.DataFrame = df_vehicle_ownership.iloc[
+        income_bins_removed:-income_bins_removed
+    ]
+
+    income_distribution_module = IncomeDistributionModule()
+    car_ownership_module = CarOwnershipModule()
+    car_ownership_module.fit(
+        income=df_vehicle_ownership_for_fit.adjusted_income.values,
+        ownership=df_vehicle_ownership_for_fit.adjusted_vehicle_ownership.values,
+        bootstrap=False,
+    )
+
+    years: Iterable[int] = df_income_distribution.index.values
+    for year in years:
+        s_income_distribution: pd.Series = df_income_distribution.loc[year]
+
+        stock_val: int
+        outputs: dict[str, sp.Basic]
+        if year in s_vehicle_stock.index:
+            stock_val = int(s_vehicle_stock[year])
+
+        else:
+            outputs = income_distribution_module.forward(
+                {
+                    "income": s_income_distribution.adjusted_income,
+                    "gini": s_income_distribution.gini,
+                }
+            )
+            income_rv: sp.Basic = outputs["income_rv"]
+
+            outputs = car_ownership_module.forward({"income": income_rv})
+            ownership_rv: sp.Basic = outputs["ownership"]
+
+            ownership_val = sps.E(ownership_rv, numsamples=rv_expectation_samples)
+            stock_val = int(ownership_val * s_population[year])
+
+        logging.info(f"Total stock of cars in {year}: {stock_val}")
+        logging.info(s_income_distribution.to_dict())
 
 
 def main(_):
+    logging.set_verbosity(logging.INFO)
+
     vehicle_subsidy()
     vehicle_survival_rate_experiment()
     vehicle_ownership_experiment()
+    vehicle_stock_experiment()
 
 
 if __name__ == "__main__":

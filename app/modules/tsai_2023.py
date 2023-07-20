@@ -8,7 +8,8 @@
 import numpy as np
 import scipy.optimize
 import sympy as sp
-import sympy.stats
+import sympy.stats as sps
+import sympy.stats.rv
 
 from app.modules.base import FittableModule, Module
 
@@ -45,31 +46,25 @@ class VehicleSurvivalRateModule(FittableModule):
         return {self.a: a, self.b: b}
 
 
-class VehicleSalesModule(Module):
-    def __init__(self):
-        pass
-
-
 # Section 2.2.2: Disposable Income Distribution
-class DisposableIncomeDistributionModule(Module):
+class IncomeDistributionModule(Module):
     def __init__(self):
         income = sp.Symbol("income")
-        gini_index = sp.Symbol("gini_index")
+        gini = sp.Symbol("gini")
 
-        beta = 1 / gini_index
+        beta = 1 / gini
         alpha = income * sp.sin(sp.pi / beta) / (sp.pi / beta)
 
+        income_var = sp.Symbol("income_var")
         income_pdf = (
             (beta / alpha)
-            * (income / alpha) ** (beta - 1)
-            / (1 + (income / alpha) ** beta) ** 2
+            * (income_var / alpha) ** (beta - 1)
+            / (1 + (income_var / alpha) ** beta) ** 2
         )
-        income_rv = sympy.stats.ContinuousRV(
-            income, income_pdf, set=sp.Interval(0, sp.oo)
-        )
+        income_rv = sps.ContinuousRV(income_var, income_pdf, set=sp.Interval(0, sp.oo))
 
         self.income = income
-        self.gini_index = gini_index
+        self.gini = gini
 
         self.beta = beta
         self.alpha = alpha
