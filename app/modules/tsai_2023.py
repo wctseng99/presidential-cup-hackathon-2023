@@ -95,7 +95,9 @@ class CarOwnershipModule(GompertzDistributionModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        params: dict[sp.Basic, float] = super()._fit(x=income_in_millions, y=ownership)
+        params: dict[sp.Basic, float] = super()._fit(
+            x=income_in_millions, y=ownership, p0=[np.max(ownership), -2, -2]
+        )
         params[self.beta] /= 1_000_000
 
         return params
@@ -114,7 +116,9 @@ class ScooterOwnershipModule(GammaDistributionModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        params: dict[sp.Basic, float] = super()._fit(x=income_in_millions, y=ownership)
+        params: dict[sp.Basic, float] = super()._fit(
+            x=income_in_millions, y=ownership, p0=[1.5, 1, 0.1]
+        )
         params[self.beta] /= 1_000_000
 
         return params

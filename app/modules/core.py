@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import scipy.optimize
 import sympy as sp
@@ -30,12 +32,12 @@ class GompertzDistributionModule(FittableModule):
             "y": self.y,
         }
 
-    def _fit(self, x: np.ndarray, y: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+    def _fit(self, x: np.ndarray, y: np.ndarray, p0: Any) -> dict[sp.Basic, float]:  # type: ignore
         (gamma, alpha, beta), _ = scipy.optimize.curve_fit(
             sp.lambdify([self.x, self.gamma, self.alpha, self.beta], self.y),
             x,
             y,
-            p0=[np.max(y), -2, -2],
+            p0=p0,
         )
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
@@ -47,8 +49,8 @@ class GammaDistributionModule(FittableModule):
         beta = sp.Symbol("beta")
         C = sp.Symbol("C")
 
-        y = ((beta**alpha) * (x ** (alpha - 1)) * sp.exp(-beta * x)) / sp.gamma(
-            alpha
+        y = (
+            (beta**alpha) * (x ** (alpha - 1)) * sp.exp(-beta * x) / sp.gamma(alpha)
         ) + C
 
         self.x = x
@@ -66,11 +68,11 @@ class GammaDistributionModule(FittableModule):
             "y": self.y,
         }
 
-    def _fit(self, x: np.ndarray, y: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+    def _fit(self, x: np.ndarray, y: np.ndarray, p0: Any) -> dict[sp.Basic, float]:  # type: ignore
         (alpha, beta, C), _ = scipy.optimize.curve_fit(
             sp.lambdify([self.x, self.alpha, self.beta, self.C], self.y),
             x,
             y,
-            p0=[1.5, 1, 0.1],
+            p0=p0,
         )
         return {self.alpha: alpha, self.beta: beta, self.C: C}
