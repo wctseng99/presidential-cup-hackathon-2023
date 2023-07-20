@@ -58,7 +58,7 @@ def vehicle_subsidy():
     pprint.pprint(output_values)
 
 
-def vehicle_survival_rate():
+def vehicle_survival_rate_experiment():
     objs: list[Any] = []
 
     for vehicle_type in [
@@ -106,7 +106,7 @@ def vehicle_survival_rate():
     fig.savefig(f"2-2-1.pdf")
 
 
-def vehicle_ownership():
+def vehicle_ownership_experiment():
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
         vehicle: str = vehicle_type.value.lower()
 
@@ -161,9 +161,9 @@ def vehicle_ownership():
 
 
 def main(_):
-    # vehicle_subsidy()
-    vehicle_survival_rate()
-    # vehicle_ownership()
+    vehicle_subsidy()
+    vehicle_survival_rate_experiment()
+    vehicle_ownership_experiment()
 
 
 if __name__ == "__main__":
