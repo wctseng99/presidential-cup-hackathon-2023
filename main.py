@@ -1,4 +1,5 @@
 import pprint
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -58,20 +59,51 @@ def vehicle_subsidy():
 
 
 def vehicle_survival_rate():
+    objs: list[Any] = []
+
     for vehicle_type in [
         VehicleType.CAR,
         VehicleType.SCOOTER,
         VehicleType.OPERATING_CAR,
     ]:
+        vehicle: str = vehicle_type.value.lower()
+
         s: pd.Series = get_vehicle_survival_rate_series(
             FLAGS.data_dir, vehicle_type=vehicle_type
         )
+        objs.extend(s.reset_index().assign(vehicle=vehicle).to_dict(orient="records"))
+
         module = VehicleSurvivalRateModule()
         module.fit(age=s.index.values, survival_rate=s.values, bootstrap=False)
 
-        input_values: dict[str, float] = {"age": 10}
-        output_values = module.forward(input_values)
-        pprint.pprint(output_values)
+        for age in np.linspace(0, 30):
+            output_values = module.forward({"age": age})
+
+            objs.append(
+                {
+                    "age": age,
+                    "survival_rate_fitted": output_values["survival_rate"],
+                    "vehicle": vehicle,
+                }
+            )
+
+    df_plot: pd.DataFrame = pd.DataFrame(objs)
+
+    (fig, ax) = plt.subplots(1, 1, figsize=(6, 4))
+    (
+        so.Plot(df_plot, x="age", y="survival_rate", color="vehicle")
+        .add(so.Dot())
+        .on(ax)
+        .plot()
+    )
+    (
+        so.Plot(df_plot, x="age", y="survival_rate_fitted", color="vehicle")
+        .add(so.Line())
+        .on(ax)
+        .plot()
+    )
+    fig.tight_layout()
+    fig.savefig(f"2-2-1.pdf")
 
 
 def vehicle_ownership():
@@ -129,9 +161,9 @@ def vehicle_ownership():
 
 
 def main(_):
-    vehicle_subsidy()
+    # vehicle_subsidy()
     vehicle_survival_rate()
-    vehicle_ownership()
+    # vehicle_ownership()
 
 
 if __name__ == "__main__":
