@@ -123,6 +123,8 @@ def vehicle_ownership_experiment():
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
         vehicle: str = vehicle_type.value.lower()
 
+        logging.info(f"Vehicle type: {vehicle}")
+
         df: pd.DataFrame = get_vehicle_ownership_data(
             FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=100
         )
@@ -177,15 +179,15 @@ def vehicle_stock_experiment(
     df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_data(
         FLAGS.data_dir, vehicle_type=VehicleType.CAR, income_bins=income_bins_total
     )
-    df_vehicle_ownership_for_fit: pd.DataFrame = df_vehicle_ownership.iloc[
+    df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
         income_bins_removed:-income_bins_removed
     ]
 
     income_distribution_module = IncomeDistributionModule()
     car_ownership_module = CarOwnershipModule()
     car_ownership_module.fit(
-        income=df_vehicle_ownership_for_fit.adjusted_income.values,
-        ownership=df_vehicle_ownership_for_fit.adjusted_vehicle_ownership.values,
+        income=df_vehicle_ownership_to_fit.adjusted_income.values,
+        ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
         bootstrap=False,
     )
 
@@ -220,10 +222,10 @@ def vehicle_stock_experiment(
 def main(_):
     logging.set_verbosity(logging.INFO)
 
-    vehicle_subsidy()
-    vehicle_survival_rate_experiment()
+    # vehicle_subsidy()
+    # vehicle_survival_rate_experiment()
     vehicle_ownership_experiment()
-    vehicle_stock_experiment()
+    # vehicle_stock_experiment()
 
 
 if __name__ == "__main__":

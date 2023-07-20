@@ -12,6 +12,7 @@ import sympy.stats as sps
 import sympy.stats.rv
 
 from app.modules.base import FittableModule, Module
+from app.modules.core import GammaDistributionModule, GompertzDistributionModule
 
 
 # Section 2.2.1: Stock and Sales
@@ -81,77 +82,39 @@ class IncomeDistributionModule(Module):
 
 
 # Section 2.2.3: Ownership Probability Function
-class CarOwnershipModule(FittableModule):
+class CarOwnershipModule(GompertzDistributionModule):
     def __init__(self):
-        income = sp.Symbol("income")
-        gamma = sp.Symbol("gamma")
-        alpha = sp.Symbol("alpha")
-        beta = sp.Symbol("beta")
+        super().__init__()
 
-        ownership = gamma * sp.exp(alpha * sp.exp(beta * income))
-
-        self.income = income
-        self.gamma = gamma
-        self.alpha = alpha
-        self.beta = beta
-
-        self.ownership = ownership
+        self.income = self.x
+        self.ownership = self.y
 
     def output_symbols(self) -> dict[str, sp.Basic]:
-        return {
-            "gamma": self.gamma,
-            "alpha": self.alpha,
-            "beta": self.beta,
-            "ownership": self.ownership,
-        }
+        return {"ownership": self.y, **super().output_symbols()}
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        (gamma, alpha, beta), _ = scipy.optimize.curve_fit(
-            sp.lambdify(
-                [self.income, self.gamma, self.alpha, self.beta], self.ownership
-            ),
-            income_in_millions,
-            ownership,
-            p0=[np.max(ownership), -2, -2],
-        )
-        return {self.gamma: gamma, self.alpha: alpha, self.beta: beta / 1_000_000}
+        params: dict[sp.Basic, float] = super()._fit(x=income_in_millions, y=ownership)
+        params[self.beta] /= 1_000_000
+
+        return params
 
 
-class ScooterOwnershipModule(FittableModule):
+class ScooterOwnershipModule(GammaDistributionModule):
     def __init__(self):
-        income = sp.Symbol("income")
-        alpha = sp.Symbol("alpha")
-        beta = sp.Symbol("beta")
-        C = sp.Symbol("C")
+        super().__init__()
 
-        ownership = (
-            (beta**alpha) * (income ** (alpha - 1)) * sp.exp(-beta * income)
-        ) / sp.gamma(alpha) + C
-
-        self.income = income
-        self.alpha = alpha
-        self.beta = beta
-        self.C = C
-
-        self.ownership = ownership
+        self.income = self.x
+        self.ownership = self.y
 
     def output_symbols(self) -> dict[str, sp.Basic]:
-        return {
-            "alpha": self.alpha,
-            "beta": self.beta,
-            "C": self.C,
-            "ownership": self.ownership,
-        }
+        return {"ownership": self.y, **super().output_symbols()}
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
-        (alpha, beta, C), _ = scipy.optimize.curve_fit(
-            sp.lambdify([self.income, self.alpha, self.beta, self.C], self.ownership),
-            income_in_millions,
-            ownership,
-            p0=[1.5, 1, 0.1],
-        )
-        return {self.alpha: alpha, self.beta: beta / 1_000_000, self.C: C}
+        params: dict[sp.Basic, float] = super()._fit(x=income_in_millions, y=ownership)
+        params[self.beta] /= 1_000_000
+
+        return params
