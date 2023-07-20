@@ -13,6 +13,7 @@ absl-py = "^1.4.0"
 pandas = "^2.0.3"
 seaborn = "^0.12.2"
 matplotlib = "^3.7.2"
+rich = "^13.4.2"
 
 [tool.pyright]
 include = ["app"]
