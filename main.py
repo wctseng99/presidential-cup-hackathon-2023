@@ -22,6 +22,7 @@ from app.data import (
 from app.modules import (
     CarOwnershipModule,
     IncomeDistributionModule,
+    Module,
     ScooterOwnershipModule,
     VehicleSubsidyModule,
     VehicleSurvivalRateModule,
@@ -163,65 +164,77 @@ def tsai_2023_sec_2_2_2_experiment():
 
     df_plot: pd.DataFrame = pd.DataFrame(objs)
 
-    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    fig = plt.Figure(figsize=(6, 4))
     (
-        so.Plot(df_plot, x="income_value", y="income_pdf_value", color="year")
+        so.Plot(
+            df_plot,
+            x="income_value",
+            y="income_pdf_value",
+            color="year",
+        )
         .add(so.Line())
         .label(x="Disposable Income", y="Probability Density")
-        .on(ax)
+        .on(fig)
         .plot()
     )
     fig.tight_layout()
     fig.savefig(f"tsai-2023-sec-2-2-2.pdf")
 
 
-def tsai_2023_sec_2_2_3_experiment():
+def tsai_2023_sec_2_2_3_experiment(
+    income_bins_total: int = 100,
+    income_bins_removed: int = 1,
+):
     logging.info("Running vehicle ownership experiment.")
 
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
-        vehicle: str = vehicle_type.value.lower()
-
-        logging.info(f"Vehicle type: {vehicle}")
-
-        df: pd.DataFrame = get_vehicle_ownership_data(
-            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=100
-        )
+        ylim: tuple[float, float]
+        module: Module
 
         if vehicle_type == VehicleType.CAR:
             ylim = (0.1, 0.65)
+            module = CarOwnershipModule()
         elif vehicle_type == VehicleType.SCOOTER:
             ylim = (0.3, 0.7)
+            module = ScooterOwnershipModule()
+        else:
+            raise ValueError(f"Unknown vehicle type: {vehicle_type}.")
+
+        vehicle: str = vehicle_type.value.lower()
+        logging.info(f"Vehicle type: {vehicle}")
+
+        df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_data(
+            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
+        )
+        df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
+            income_bins_removed:-income_bins_removed
+        ]
 
         fig = plt.Figure(figsize=(6, 4))
         (
             so.Plot(
-                df,
+                df_vehicle_ownership,
                 x="adjusted_income",
                 y="adjusted_vehicle_ownership",
             )
             .add(so.Dot())
-            .limit(x=(0, 2e6), y=ylim)
             .label(x="Income", y=f"{vehicle.title()} Ownership")
+            .limit(x=(0, 2e6), y=ylim)
             .on(fig)
             .plot()
         )
         fig.tight_layout()
         fig.savefig(f"tsai-2023-sec-2-2-3-{vehicle}.pdf")
 
-        if vehicle_type == VehicleType.CAR:
-            module = CarOwnershipModule()
-        else:
-            module = ScooterOwnershipModule()
-
         module.fit(
-            income=df.iloc[1:-1].adjusted_income.values,
-            ownership=df.iloc[1:-1].adjusted_vehicle_ownership.values,
+            income=df_vehicle_ownership_to_fit.adjusted_income.values,
+            ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
             bootstrap=False,
         )
         logging.info(module.param_symbol_values)
 
 
-def vehicle_stock_experiment(
+def tsai_2023_sec_3_1_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
     rv_expectation_samples: int = 1000,
@@ -284,7 +297,7 @@ def main(_):
     tsai_2023_sec_2_2_1_experiment()
     tsai_2023_sec_2_2_2_experiment()
     tsai_2023_sec_2_2_3_experiment()
-    vehicle_stock_experiment()
+    tsai_2023_sec_3_1_experiment()
 
 
 if __name__ == "__main__":
