@@ -13,6 +13,7 @@ from absl import app, flags, logging
 
 from app.data import (
     VehicleType,
+    get_gdp_per_capita_series,
     get_income_dataframe,
     get_population_series,
     get_vehicle_ownership_data,
@@ -23,6 +24,7 @@ from app.modules import (
     CarOwnershipModule,
     IncomeDistributionModule,
     Module,
+    OperatingCarStockModule,
     ScooterOwnershipModule,
     VehicleSubsidyModule,
     VehicleSurvivalRateModule,
@@ -234,6 +236,60 @@ def tsai_2023_sec_2_2_3_experiment(
         logging.info(module.param_symbol_values)
 
 
+def tsai_2023_sec_2_3_experiment():
+    logging.info("Running vehicle stock experiment.")
+
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
+        FLAGS.data_dir, vehicle_type=VehicleType.OPERATING_CAR
+    )
+    index: pd.Index = s_vehicle_stock.index
+
+    s_gdp_per_capita: pd.Series = get_gdp_per_capita_series(
+        FLAGS.data_dir, extrapolate_index=index
+    )
+    df_vehicle_stock: pd.DataFrame = pd.concat(
+        [s_vehicle_stock, s_gdp_per_capita], axis=1
+    ).loc[index]
+
+    objs: list[dict] = df_vehicle_stock.reset_index().to_dict(orient="records")
+
+    module = OperatingCarStockModule()
+    module.fit(
+        gdp_per_capita=df_vehicle_stock.gdp_per_capita.values,
+        stock=df_vehicle_stock.vehicle_stock.values,
+        bootstrap=False,
+    )
+    logging.info(module.param_symbol_values)
+
+    for gdp_per_capita in np.linspace(600_000, 1_500_000, 1_000):
+        output_values = module.forward({"gdp_per_capita": gdp_per_capita})
+
+        objs.append(
+            {
+                "gdp_per_capita": gdp_per_capita,
+                "vehicle_stock_fitted": output_values["stock"],
+            }
+        )
+
+    df_plot: pd.DataFrame = pd.DataFrame(objs)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    (
+        so.Plot(df_plot, x="gdp_per_capita", y="vehicle_stock")
+        .add(so.Dot())
+        .on(ax)
+        .plot()
+    )
+    (
+        so.Plot(df_plot, x="gdp_per_capita", y="vehicle_stock_fitted")
+        .add(so.Line())
+        .on(ax)
+        .plot()
+    )
+    fig.tight_layout()
+    fig.savefig(f"tsai-2023-sec-2-3.pdf")
+
+
 def tsai_2023_sec_3_1_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
@@ -297,6 +353,7 @@ def main(_):
     tsai_2023_sec_2_2_1_experiment()
     tsai_2023_sec_2_2_2_experiment()
     tsai_2023_sec_2_2_3_experiment()
+    tsai_2023_sec_2_3_experiment()
     tsai_2023_sec_3_1_experiment()
 
 

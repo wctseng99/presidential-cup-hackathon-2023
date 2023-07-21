@@ -125,7 +125,7 @@ class ScooterOwnershipModule(GammaDistributionModule):
 
 
 # Section 2.3: Non-private Cars Module
-class NonPrivateCarStockModule(GompertzDistributionModule):
+class OperatingCarStockModule(GompertzDistributionModule):
     def __init__(self):
         super().__init__()
 
@@ -133,7 +133,7 @@ class NonPrivateCarStockModule(GompertzDistributionModule):
         self.stock = self.y
 
     def output_symbols(self) -> dict[str, sp.Basic]:
-        return {"gdp_per_capita": self.y, **super().output_symbols()}
+        return {"stock": self.y, **super().output_symbols()}
 
     def _fit(self, gdp_per_capita: np.ndarray, stock: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000

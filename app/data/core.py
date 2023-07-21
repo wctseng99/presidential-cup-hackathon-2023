@@ -85,6 +85,7 @@ get_gdp_per_capita_series = get_column_data_fn(
     csv_name="GDPperCapita.csv",
     index_column="year",
     value_column="GDPperCapita",
+    value_column_rename="gdp_per_capita",
 )
 
 get_gini_series = get_column_data_fn(

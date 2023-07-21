@@ -3,6 +3,7 @@ from app.data.core import (
     extrapolate_series,
     get_column_data_fn,
     get_deflation_series,
+    get_gdp_per_capita_series,
     get_gini_series,
     get_income_dataframe,
     get_income_series,
