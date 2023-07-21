@@ -2,6 +2,7 @@ import pprint
 from collections.abc import Iterable
 from typing import Any
 
+import graphviz as gv
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -66,8 +67,14 @@ def vehicle_subsidy():
     output_values = module.forward(input_values)
     logging.info(f"Output values: {pprint.pformat(output_values)}")
 
+    dot_str: str = sp.dotprint(
+        module.E_G,
+        atom=lambda x: not isinstance(x, sp.Basic),
+    )
+    gv.Source(dot_str).render("total_budget.gv", format="png")
 
-def vehicle_survival_rate_experiment():
+
+def tsai_2023_sec_2_2_1_experiment():
     logging.info("Running vehicle survival rate experiment.")
 
     objs: list[Any] = []
@@ -114,10 +121,61 @@ def vehicle_survival_rate_experiment():
         .plot()
     )
     fig.tight_layout()
-    fig.savefig(f"2-2-1.pdf")
+    fig.savefig(f"tsai-2023-sec-2-2-1.pdf")
 
 
-def vehicle_ownership_experiment():
+def tsai_2023_sec_2_2_2_experiment():
+    logging.info("Running income distribution experiment.")
+
+    df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
+    income_distribution_module = IncomeDistributionModule()
+
+    income_values: np.ndarray = np.linspace(0, 1_000_000, 1_000)
+
+    objs: list[Any] = []
+
+    years: Iterable[int] = range(2000, 2060, 10)
+    for year in years:
+        logging.info(f"Running year {year}.")
+
+        s_income_distribution: pd.Series = df_income_distribution.loc[year]
+
+        outputs = income_distribution_module.forward(
+            {
+                "income": s_income_distribution.adjusted_income,
+                "gini": s_income_distribution.gini,
+            }
+        )
+        income_rv: sp.Basic = outputs["income_rv"]
+
+        income_pdf_values: np.ndarray = np.vectorize(
+            lambda income_value: sps.density(income_rv)(income_value).evalf()
+        )(income_values)
+
+        for income_value, income_pdf_value in zip(income_values, income_pdf_values):
+            objs.append(
+                {
+                    "year": year,
+                    "income_value": income_value,
+                    "income_pdf_value": income_pdf_value,
+                }
+            )
+
+    df_plot: pd.DataFrame = pd.DataFrame(objs)
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    (
+        so.Plot(df_plot, x="income_value", y="income_pdf_value", color="year")
+        .add(so.Line())
+        .label(x="Disposable Income", y="Probability Density")
+        .on(ax)
+        .plot()
+    )
+    fig.tight_layout()
+    fig.savefig(f"tsai-2023-sec-2-2-2.pdf")
+
+
+def tsai_2023_sec_2_2_3_experiment():
     logging.info("Running vehicle ownership experiment.")
 
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
@@ -148,7 +206,7 @@ def vehicle_ownership_experiment():
             .plot()
         )
         fig.tight_layout()
-        fig.savefig(f"2-2-3-{vehicle}.pdf")
+        fig.savefig(f"tsai-2023-sec-2-2-3-{vehicle}.pdf")
 
         if vehicle_type == VehicleType.CAR:
             module = CarOwnershipModule()
@@ -222,10 +280,11 @@ def vehicle_stock_experiment(
 def main(_):
     logging.set_verbosity(logging.INFO)
 
-    # vehicle_subsidy()
-    # vehicle_survival_rate_experiment()
-    vehicle_ownership_experiment()
-    # vehicle_stock_experiment()
+    vehicle_subsidy()
+    tsai_2023_sec_2_2_1_experiment()
+    tsai_2023_sec_2_2_2_experiment()
+    tsai_2023_sec_2_2_3_experiment()
+    vehicle_stock_experiment()
 
 
 if __name__ == "__main__":

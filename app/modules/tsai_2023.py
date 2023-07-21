@@ -122,3 +122,29 @@ class ScooterOwnershipModule(GammaDistributionModule):
         params[self.beta] /= 1_000_000
 
         return params
+
+
+# Section 2.3: Non-private Cars Module
+class NonPrivateCarStockModule(GompertzDistributionModule):
+    def __init__(self):
+        super().__init__()
+
+        self.gdp_per_capita = self.x
+        self.stock = self.y
+
+    def output_symbols(self) -> dict[str, sp.Basic]:
+        return {"gdp_per_capita": self.y, **super().output_symbols()}
+
+    def _fit(self, gdp_per_capita: np.ndarray, stock: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+        gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000
+        stock_in_millions: np.ndarray = stock / 1_000_000
+
+        params: dict[sp.Basic, float] = super()._fit(
+            x=gdp_per_capita_in_millions,
+            y=stock_in_millions,
+            p0=[np.max(gdp_per_capita_in_millions), -80, -8],
+        )
+        params[self.beta] /= 1_000_000
+        params[self.gamma] *= 1_000_000
+
+        return params

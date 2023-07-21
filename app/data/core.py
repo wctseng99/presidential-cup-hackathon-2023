@@ -81,6 +81,12 @@ get_income_series = get_column_data_fn(
     value_column_rename="income",
 )
 
+get_gdp_per_capita_series = get_column_data_fn(
+    csv_name="GDPperCapita.csv",
+    index_column="year",
+    value_column="GDPperCapita",
+)
+
 get_gini_series = get_column_data_fn(
     csv_name="giniIndex.csv",
     index_column="year",
