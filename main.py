@@ -1,3 +1,4 @@
+import logging as py_logging
 import pprint
 from collections.abc import Iterable
 from typing import Any
@@ -251,7 +252,10 @@ def tsai_2023_sec_2_3_experiment():
         [s_vehicle_stock, s_gdp_per_capita], axis=1
     ).loc[index]
 
-    objs: list[dict] = df_vehicle_stock.reset_index().to_dict(orient="records")
+    objs: list[dict[str, Any]] = [
+        {"zorder": 1, **obj}
+        for obj in df_vehicle_stock.reset_index().to_dict(orient="records")
+    ]
 
     module = OperatingCarStockModule()
     module.fit(
@@ -266,28 +270,35 @@ def tsai_2023_sec_2_3_experiment():
 
         objs.append(
             {
+                "zorder": 0,
                 "gdp_per_capita": gdp_per_capita,
-                "vehicle_stock_fitted": output_values["stock"],
+                "vehicle_stock": output_values["stock"],
             }
         )
 
     df_plot: pd.DataFrame = pd.DataFrame(objs)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
     (
-        so.Plot(df_plot, x="gdp_per_capita", y="vehicle_stock")
-        .add(so.Dot())
-        .on(ax)
-        .plot()
-    )
-    (
-        so.Plot(df_plot, x="gdp_per_capita", y="vehicle_stock_fitted")
+        so.Plot(
+            df_plot,
+            x="gdp_per_capita",
+            y="vehicle_stock",
+            color="zorder",
+            marker="zorder",
+            linewidth="zorder",
+            linestyle="zorder",
+        )
         .add(so.Line())
-        .on(ax)
-        .plot()
+        .scale(
+            color=so.Nominal(["gray", "b"], order=[0, 1]),
+            marker=so.Nominal([None, "o"], order=[0, 1]),
+            linewidth=so.Nominal([2, 0], order=[0, 1]),
+            linestyle=so.Nominal([(6, 2), "-"], order=[0, 1]),
+        )
+        .label(x="GDP per Capita", y="Vehicle Stock")
+        .layout(size=(6, 4))
+        .save("tsai-2023-sec-2-3.pdf")
     )
-    fig.tight_layout()
-    fig.savefig(f"tsai-2023-sec-2-3.pdf")
 
 
 def tsai_2023_sec_3_1_experiment(
@@ -347,6 +358,8 @@ def tsai_2023_sec_3_1_experiment(
 
 
 def main(_):
+    py_logging.getLogger("matplotlib.category").setLevel(py_logging.WARNING)
+
     logging.set_verbosity(logging.INFO)
 
     vehicle_subsidy()
