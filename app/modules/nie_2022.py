@@ -4,14 +4,15 @@
 #
 # https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914
 
+
 from typing import Any
 
 import sympy as sp
 
-from app.modules.base import Module
+from app.modules.base import BaseModule
 
 
-class VehicleSubsidyModule(Module):
+class VehicleSubsidyModule(BaseModule):
     def __init__(self):
         d = sp.Symbol("d")
         f_e = sp.Symbol("f_e")
@@ -174,7 +175,7 @@ class VehicleSubsidyModule(Module):
         self.CER = CER
         self.δ = δ
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
+    def output(self) -> dict[str, sp.Basic]:
         return {
             "ρ_c": self.ρ_c,
             "S_e": self.S_e,
@@ -208,17 +209,15 @@ class VehicleSubsidyModule(Module):
             "δ": self.δ,
         }
 
-    def forward(self, input_values: dict[str, Any]) -> dict[str, sp.Basic]:
+    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
         # find the leader solution to the stackelberg game
-        dU_G__dρ_c = self._forward(
-            sp.diff(self.U_G, self.ρ_c), input_values=input_values
-        )
+        dU_G__dρ_c = super().__call__(output=sp.diff(self.U_G, self.ρ_c), **inputs)
         ρ_c: list[sp.Basic] = sp.solve(dU_G__dρ_c, self.ρ_c)
 
         if len(ρ_c) != 1:
             raise ValueError("Expected one solution for ρ_c")
 
-        input_values.update({"ρ_c": ρ_c[0]})
+        inputs.update({"ρ_c": ρ_c[0]})
 
         # unroll the follower solutions
-        return super().forward(input_values=input_values)
+        return super().__call__(**inputs)

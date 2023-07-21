@@ -5,10 +5,10 @@ import scipy.optimize
 import sympy as sp
 import sympy.stats.rv
 
-from app.modules.base import FittableModule
+from app.modules.base import Module
 
 
-class GompertzDistributionModule(FittableModule):
+class GompertzDistributionModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
         gamma = sp.Symbol("gamma")
@@ -24,7 +24,7 @@ class GompertzDistributionModule(FittableModule):
 
         self.y = y
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
+    def output(self) -> dict[str, sp.Basic]:
         return {
             "gamma": self.gamma,
             "alpha": self.alpha,
@@ -42,7 +42,7 @@ class GompertzDistributionModule(FittableModule):
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
 
-class GammaDistributionModule(FittableModule):
+class GammaDistributionModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
         alpha = sp.Symbol("alpha")
@@ -60,7 +60,7 @@ class GammaDistributionModule(FittableModule):
 
         self.y = y
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
+    def output(self) -> dict[str, sp.Basic]:
         return {
             "alpha": self.alpha,
             "beta": self.beta,

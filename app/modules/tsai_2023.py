@@ -11,12 +11,12 @@ import sympy as sp
 import sympy.stats as sps
 import sympy.stats.rv
 
-from app.modules.base import FittableModule, Module
+from app.modules.base import BaseModule, Module
 from app.modules.core import GammaDistributionModule, GompertzDistributionModule
 
 
 # Section 2.2.1: Stock and Sales
-class VehicleSurvivalRateModule(FittableModule):
+class VehicleSurvivalRateModule(Module):
     def __init__(self):
         age = sp.Symbol("age")
         a = sp.Symbol("a")
@@ -30,7 +30,7 @@ class VehicleSurvivalRateModule(FittableModule):
 
         self.survival_rate = survival_rate
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
+    def output(self) -> dict[str, sp.Basic]:
         return {
             "a": self.a,
             "b": self.b,
@@ -48,7 +48,7 @@ class VehicleSurvivalRateModule(FittableModule):
 
 
 # Section 2.2.2: Disposable Income Distribution
-class IncomeDistributionModule(Module):
+class IncomeDistributionModule(BaseModule):
     def __init__(self):
         income = sp.Symbol("income")
         gini = sp.Symbol("gini")
@@ -72,7 +72,7 @@ class IncomeDistributionModule(Module):
         self.income_pdf = income_pdf
         self.income_rv = income_rv
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
+    def output(self) -> dict[str, sp.Basic]:
         return {
             "beta": self.beta,
             "alpha": self.alpha,
@@ -89,8 +89,8 @@ class CarOwnershipModule(GompertzDistributionModule):
         self.income = self.x
         self.ownership = self.y
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
-        return {"ownership": self.y, **super().output_symbols()}
+    def output(self) -> dict[str, sp.Basic]:
+        return {"ownership": self.ownership, **super().output()}
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
@@ -110,8 +110,8 @@ class ScooterOwnershipModule(GammaDistributionModule):
         self.income = self.x
         self.ownership = self.y
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
-        return {"ownership": self.y, **super().output_symbols()}
+    def output(self) -> dict[str, sp.Basic]:
+        return {"ownership": self.ownership, **super().output()}
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
@@ -124,7 +124,7 @@ class ScooterOwnershipModule(GammaDistributionModule):
         return params
 
 
-# Section 2.3: Non-private Cars Module
+# Section 2.3: Non-private Cars BaseModule
 class OperatingCarStockModule(GompertzDistributionModule):
     def __init__(self):
         super().__init__()
@@ -132,8 +132,8 @@ class OperatingCarStockModule(GompertzDistributionModule):
         self.gdp_per_capita = self.x
         self.stock = self.y
 
-    def output_symbols(self) -> dict[str, sp.Basic]:
-        return {"stock": self.y, **super().output_symbols()}
+    def output(self) -> dict[str, sp.Basic]:
+        return {"stock": self.y, **super().output()}
 
     def _fit(self, gdp_per_capita: np.ndarray, stock: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000
