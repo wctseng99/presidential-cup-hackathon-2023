@@ -74,7 +74,7 @@ class Module(BaseModule):
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
         if self.param_by_symbol is None:
-            raise RuntimeError("BaseModule has not been fitted")
+            raise RuntimeError("Module has not been fitted")
 
         if output is None:
             output = self.output()

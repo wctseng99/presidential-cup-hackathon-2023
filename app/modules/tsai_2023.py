@@ -5,14 +5,15 @@
 # https://www.sciencedirect.com/science/article/pii/S1361920922003686
 
 
+from typing import Any
+
 import numpy as np
 import scipy.optimize
 import sympy as sp
 import sympy.stats as sps
-import sympy.stats.rv
 
 from app.modules.base import BaseModule, Module
-from app.modules.core import GammaDistributionModule, GompertzDistributionModule
+from app.modules.core import GammaCurveModule, GompertzCurveModule
 
 
 # Section 2.2.1: Stock and Sales
@@ -82,7 +83,7 @@ class IncomeDistributionModule(BaseModule):
 
 
 # Section 2.2.3: Ownership Probability Function
-class CarOwnershipModule(GompertzDistributionModule):
+class CarOwnershipModule(GompertzCurveModule):
     def __init__(self):
         super().__init__()
 
@@ -91,6 +92,12 @@ class CarOwnershipModule(GompertzDistributionModule):
 
     def output(self) -> dict[str, sp.Basic]:
         return {"ownership": self.ownership, **super().output()}
+
+    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+        income: sp.Float = inputs.pop("income")
+        income_in_millions: sp.Float = income / 1_000_000
+
+        return super().__call__(output, income=income_in_millions, **inputs)
 
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
@@ -98,12 +105,11 @@ class CarOwnershipModule(GompertzDistributionModule):
         params: dict[sp.Basic, float] = super()._fit(
             x=income_in_millions, y=ownership, p0=[np.max(ownership), -2, -2]
         )
-        params[self.beta] /= 1_000_000
 
         return params
 
 
-class ScooterOwnershipModule(GammaDistributionModule):
+class ScooterOwnershipModule(GammaCurveModule):
     def __init__(self):
         super().__init__()
 
@@ -113,19 +119,24 @@ class ScooterOwnershipModule(GammaDistributionModule):
     def output(self) -> dict[str, sp.Basic]:
         return {"ownership": self.ownership, **super().output()}
 
+    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+        income: sp.Float = inputs.pop("income")
+        income_in_millions: sp.Float = income / 1_000_000
+
+        return super().__call__(output, income=income_in_millions, **inputs)
+
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
         params: dict[sp.Basic, float] = super()._fit(
             x=income_in_millions, y=ownership, p0=[1.5, 1, 0.1]
         )
-        params[self.beta] /= 1_000_000
 
         return params
 
 
 # Section 2.3: Non-private Cars BaseModule
-class OperatingCarStockModule(GompertzDistributionModule):
+class OperatingCarStockModule(GompertzCurveModule):
     def __init__(self):
         super().__init__()
 

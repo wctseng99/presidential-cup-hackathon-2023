@@ -8,7 +8,7 @@ import sympy.stats.rv
 from app.modules.base import Module
 
 
-class GompertzDistributionModule(Module):
+class GompertzCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
         gamma = sp.Symbol("gamma")
@@ -32,17 +32,17 @@ class GompertzDistributionModule(Module):
             "y": self.y,
         }
 
-    def _fit(self, x: np.ndarray, y: np.ndarray, p0: Any) -> dict[sp.Basic, float]:  # type: ignore
+    def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
         (gamma, alpha, beta), _ = scipy.optimize.curve_fit(
             sp.lambdify([self.x, self.gamma, self.alpha, self.beta], self.y),
             x,
             y,
-            p0=p0,
+            **kwargs,
         )
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
 
-class GammaDistributionModule(Module):
+class GammaCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
         alpha = sp.Symbol("alpha")
@@ -68,11 +68,11 @@ class GammaDistributionModule(Module):
             "y": self.y,
         }
 
-    def _fit(self, x: np.ndarray, y: np.ndarray, p0: Any) -> dict[sp.Basic, float]:  # type: ignore
+    def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
         (alpha, beta, C), _ = scipy.optimize.curve_fit(
             sp.lambdify([self.x, self.alpha, self.beta, self.C], self.y),
             x,
             y,
-            p0=p0,
+            **kwargs,
         )
         return {self.alpha: alpha, self.beta: beta, self.C: C}

@@ -202,7 +202,6 @@ def tsai_2023_sec_2_2_3_experiment(
     logging.info("Running vehicle ownership experiment.")
 
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
-        ylim: tuple[float, float]
         module: BaseModule
 
         if vehicle_type == VehicleType.CAR:
@@ -371,7 +370,7 @@ def tsai_2023_sec_3_1_experiment(
         s_income_distribution: pd.Series = df_income_distribution.loc[year]
 
         stock_val: int
-        outputs: dict[str, sp.Basic]
+        output: dict[str, sp.Basic]
         if year in s_vehicle_stock.index:
             stock_val = int(s_vehicle_stock[year])
 
