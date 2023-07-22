@@ -5,7 +5,7 @@
 # https://www.sciencedirect.com/science/article/pii/S1361920922003686
 
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import scipy.optimize
@@ -94,7 +94,7 @@ class CarOwnershipModule(GompertzCurveModule):
         return {"ownership": self.ownership, **super().output()}
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
-        income: sp.Float = inputs.pop("income")
+        income: sp.Float = cast(sp.Float, inputs.pop("income"))
         income_in_millions: sp.Float = income / 1_000_000
 
         return super().__call__(output, income=income_in_millions, **inputs)
@@ -120,7 +120,7 @@ class ScooterOwnershipModule(GammaCurveModule):
         return {"ownership": self.ownership, **super().output()}
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
-        income: sp.Float = inputs.pop("income")
+        income: sp.Float = cast(sp.Float, inputs.pop("income"))
         income_in_millions: sp.Float = income / 1_000_000
 
         return super().__call__(output, income=income_in_millions, **inputs)
