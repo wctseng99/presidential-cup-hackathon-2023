@@ -595,14 +595,14 @@ def main(_):
 
     logging.set_verbosity(logging.DEBUG)
 
-    # vehicle_subsidy()
-    # tsai_2023_sec_2_2_1_experiment()
-    # tsai_2023_sec_2_2_2_experiment()
-    # tsai_2023_sec_2_2_3_experiment()
-    # tsai_2023_sec_2_3_experiment()
-    # tsai_2023_sec_2_4_experiment()
+    vehicle_subsidy()
+    tsai_2023_sec_2_2_1_experiment()
+    tsai_2023_sec_2_2_2_experiment()
+    tsai_2023_sec_2_2_3_experiment()
+    tsai_2023_sec_2_3_experiment()
+    tsai_2023_sec_2_4_experiment()
     tsai_2023_sec_2_5_experiment()
-    # tsai_2023_sec_3_1_experiment()
+    tsai_2023_sec_3_1_experiment()
 
 
 if __name__ == "__main__":
