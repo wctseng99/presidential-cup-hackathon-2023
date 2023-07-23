@@ -12,14 +12,19 @@ from app.modules.base import Module
 
 
 class LinearModule(Module):
-    def __init__(self, input_dims: int = 1):
+    def __init__(self, input_dims: int = 1, bias: bool = True):
         x = sp.symarray("x", input_dims)
         a = sp.symarray("a", input_dims)
         b = sp.Symbol("b")
 
-        y = np.dot(x, a) + b
+        if bias:
+            y = np.dot(x, a) + b
+        else:
+            y = np.dot(x, a)
 
         self.input_dims = input_dims
+        self.bias = bias
+
         self.x = x
         self.a = a
         for d in range(input_dims):
@@ -40,16 +45,62 @@ class LinearModule(Module):
         if input_dims != self.input_dims:
             raise ValueError(f"Expected {self.input_dims} inputs, but got {input_dims}")
 
-        X_one = np.r_["1,2,0", X, np.ones(num_samples)]
-        a_one, _, _, _ = scipy.linalg.lstsq(X_one, y)
-        a = a_one[:-1]
-        b = a_one[-1]
+        a: np.ndarray
+        b: float
+        y_pred: np.ndarray
+        if self.bias:
+            X_one = np.r_["1,2,0", X, np.ones(num_samples)]
+            a_one, _, _, _ = scipy.linalg.lstsq(X_one, y)
+            a = a_one[:-1]
+            b = a_one[-1]
+            y_pred = X_one @ a_one
+        else:
+            a, _, _, _ = scipy.linalg.lstsq(X, y)
+            b = 0
+            y_pred = X @ a
 
-        y_pred: np.ndarray = X_one @ a_one
         r2: float = sklearn.metrics.r2_score(y, y_pred)
 
         logging.debug(f"Fitted with r2={r2} and parameters: a={a}, b={b}")
         return {self.a[d]: a[d] for d in range(self.input_dims)} | {self.b: b}
+
+
+class SigmoidCurveModule(Module):
+    def __init__(self):
+        x = sp.Symbol("x")
+        offset = sp.Symbol("offset")
+        beta = sp.Symbol("beta")
+        gamma = sp.Symbol("gamma")
+
+        y = gamma / (1 + sp.exp(-beta * (x - offset)))
+
+        self.x = x
+        self.offset = offset
+        self.beta = beta
+        self.gamma = gamma
+
+        self.y = y
+
+    def output(self) -> dict[str, sp.Basic]:
+        return {
+            "offset": self.offset,
+            "beta": self.beta,
+            "gamma": self.gamma,
+            "y": self.y,
+        }
+
+    def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
+        fn: Callable[[np.ndarray, float, float, float], np.ndarray] = sp.lambdify(
+            [self.x, self.offset, self.beta, self.gamma], self.y
+        )
+        (offset, beta, gamma), _ = scipy.optimize.curve_fit(fn, x, y, **kwargs)
+        y_pred: np.ndarray = np.vectorize(fn)(x, offset, beta, gamma)
+        r2: float = sklearn.metrics.r2_score(y, y_pred)
+
+        logging.debug(
+            f"Fitted with r2={r2} and parameters: offset={offset}, beta={beta}, gamma={gamma}"
+        )
+        return {self.offset: offset, self.beta: beta, self.gamma: gamma}
 
 
 class GompertzCurveModule(Module):

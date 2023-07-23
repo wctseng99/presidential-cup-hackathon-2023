@@ -38,27 +38,6 @@ class BaseModule(abc.ABC):
 
 
 class Module(BaseModule):
-    @classmethod
-    def bootstrap(cls, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        size: int | None = None
-        for arg in itertools.chain(args, kwargs.values()):
-            if size is None:
-                size = len(arg)
-
-            if len(arg) != size:
-                raise ValueError("All arguments must have the same length")
-
-        if size is None:
-            raise ValueError("At least one argument must be provided")
-
-        index = np.arange(size)
-        sampled_index = np.random.choice(index, size=size, replace=True)
-
-        return (
-            [arg[sampled_index] for arg in args],
-            {key: arg[sampled_index] for key, arg in kwargs.items()},
-        )
-
     def __init__(self):
         self.param_by_symbol: dict[sp.Basic, float] | None = None
 
@@ -67,8 +46,34 @@ class Module(BaseModule):
         ...
 
     def fit(self, bootstrap: bool = True, *args: Any, **kwargs: Any) -> None:
+        sampled_index: np.ndarray | None = None
+
         if bootstrap:
-            args, kwargs = self.bootstrap(*args, **kwargs)
+            for arg in itertools.chain(args, kwargs.values()):
+                if not isinstance(arg, np.ndarray):
+                    continue
+
+                if sampled_index is None:
+                    sampled_index = np.random.choice(
+                        len(arg), size=len(arg), replace=True
+                    )
+
+                if len(arg) != sampled_index.shape[0]:
+                    raise ValueError("All arguments must have the same length")
+
+            if sampled_index is None:
+                raise ValueError("At least one argument must be provided")
+
+            args = tuple(
+                [
+                    arg[sampled_index] if isinstance(arg, np.ndarray) else arg
+                    for arg in args
+                ]
+            )
+            kwargs = {
+                key: arg[sampled_index] if isinstance(arg, np.ndarray) else arg
+                for key, arg in kwargs.items()
+            }
 
         self.param_by_symbol = self._fit(*args, **kwargs)
 
@@ -83,4 +88,4 @@ class Module(BaseModule):
             getattr(self, k): v for k, v in inputs.items()
         }
 
-        return self.subs(output, {**input_by_symbol, **self.param_by_symbol})
+        return self.subs(output, input_by_symbol | self.param_by_symbol)

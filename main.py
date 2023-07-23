@@ -1,3 +1,4 @@
+import itertools
 import logging as py_logging
 import pprint
 from collections.abc import Iterable
@@ -18,11 +19,13 @@ from app.data import (
     get_tsai_sec_2_2_3_data,
     get_tsai_sec_2_3_data,
     get_tsai_sec_2_4_data,
+    get_tsai_sec_2_5_data,
     get_vehicle_stock_series,
     get_vehicle_survival_rate_series,
 )
 from app.modules import (
     BaseModule,
+    BusStockModule,
     CarOwnershipModule,
     IncomeDistributionModule,
     LinearModule,
@@ -231,12 +234,13 @@ def tsai_2023_sec_2_2_3_experiment(
 
         curve_objs: list[dict[str, Any]] = []
         for run in range(bootstrap_runs):
+            logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+
             module.fit(
                 income=df_vehicle_ownership_to_fit.adjusted_income.values,
                 ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
                 bootstrap=True,
             )
-            logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
 
             for income in plot_income_values:
                 output = module(income=income)
@@ -309,12 +313,13 @@ def tsai_2023_sec_2_3_experiment(
 
     curve_objs: list[dict[str, Any]] = []
     for run in range(bootstrap_runs):
+        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+
         module.fit(
             gdp_per_capita=df_vehicle_stock.adjusted_gdp_per_capita.values,
             stock=df_vehicle_stock.vehicle_stock.values,
             bootstrap=True,
         )
-        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
 
         for gdp_per_capita in plot_gdp_per_capita_values:
             output = module(gdp_per_capita=gdp_per_capita)
@@ -377,12 +382,13 @@ def tsai_2023_sec_2_4_experiment(
 
     curve_objs: list[dict[str, Any]] = []
     for run in range(bootstrap_runs):
+        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+
         module.fit(
             X=df_vehicle_stock[["log_gdp_per_capita", "population"]].values,
             y=df_vehicle_stock.vehicle_stock.values,
             bootstrap=True,
         )
-        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
 
         for _, s_vehicle_stock in df_vehicle_stock.iterrows():
             output = module(
@@ -448,6 +454,88 @@ def tsai_2023_sec_2_4_experiment(
         )
 
 
+def tsai_2023_sec_2_5_experiment(
+    bootstrap_runs: int = 100,
+    plot_population_density_values: Iterable[float] = np.linspace(0, 10_000, 100),
+    plot_years: Iterable[int] = np.arange(1998, 2023),
+    plot_stock_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
+):
+    logging.info("Running Tsai 2023 Section 2.5 experiment.")
+
+    vehicle_type: VehicleType = VehicleType.BUS
+    vehicle_title: str = vehicle_type.replace("_", " ").title()
+
+    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_5_data(
+        data_dir=FLAGS.data_dir, vehicle_type=vehicle_type
+    )
+    min_year: int = df_vehicle_stock.year.min()
+
+    plot_objs: list[dict[str, Any]] = (
+        df_vehicle_stock.reset_index()
+        .assign(percentage=-1, zorder=1)
+        .to_dict(orient="records")
+    )
+
+    module = BusStockModule()
+
+    curve_objs: list[dict[str, Any]] = []
+    for run in range(bootstrap_runs):
+        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+
+        module.fit(
+            population_density=df_vehicle_stock.population_density.values,
+            year=df_vehicle_stock.year.values - min_year,
+            vehicle_stock_density=df_vehicle_stock.vehicle_stock_density.values,
+            bootstrap=True,
+        )
+
+        for population_density, year in itertools.product(
+            plot_population_density_values, plot_years
+        ):
+            output = module(population_density=population_density, year=year - min_year)
+
+            curve_objs.append(
+                {
+                    "population_density": population_density,
+                    "year": year,
+                    "vehicle_stock_density": float(output["vehicle_stock_density"]),
+                }
+            )
+
+    plot_objs.extend(
+        pd.DataFrame(curve_objs)
+        .groupby("population_density")
+        .quantile(plot_stock_quantiles)
+        .rename_axis(index={None: "percentage"})
+        .reset_index()
+        .assign(zorder=0)
+        .to_dict(orient="records")
+    )
+
+    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
+    (
+        so.Plot(
+            df_plot,
+            x="population_density",
+            y="vehicle_stock_density",
+            color="zorder",
+            marker="zorder",
+            linewidth="zorder",
+            linestyle="zorder",
+        )
+        .add(so.Line(), group="percentage")
+        .scale(
+            color={0: "gray", 1: "b"},
+            marker={0: None, 1: "o"},
+            linewidth={0: 2, 1: 0},
+            linestyle={0: (6, 2), 1: "-"},
+        )
+        .label(x="Population Density", y=f"{vehicle_title} Stock Density")
+        .layout(size=(6, 4))
+        .save(f"tsai-2023-sec-2-5.pdf")
+    )
+
+
 def tsai_2023_sec_3_1_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
@@ -507,13 +595,14 @@ def main(_):
 
     logging.set_verbosity(logging.DEBUG)
 
-    vehicle_subsidy()
-    tsai_2023_sec_2_2_1_experiment()
-    tsai_2023_sec_2_2_2_experiment()
-    tsai_2023_sec_2_2_3_experiment()
-    tsai_2023_sec_2_3_experiment()
-    tsai_2023_sec_2_4_experiment()
-    tsai_2023_sec_3_1_experiment()
+    # vehicle_subsidy()
+    # tsai_2023_sec_2_2_1_experiment()
+    # tsai_2023_sec_2_2_2_experiment()
+    # tsai_2023_sec_2_2_3_experiment()
+    # tsai_2023_sec_2_3_experiment()
+    # tsai_2023_sec_2_4_experiment()
+    tsai_2023_sec_2_5_experiment()
+    # tsai_2023_sec_3_1_experiment()
 
 
 if __name__ == "__main__":

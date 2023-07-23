@@ -39,10 +39,16 @@ class City(str, enum.Enum):
     KEELUNG = "KEELUNG"
     HSINCHU_CITY = "HSINCHU_CITY"
     CHIAYI_CITY = "CHIAYI_CITY"
+    JINMA = "JINMA"
 
 
 def to_camel_case(s: str) -> str:
     return "".join(word.capitalize() for word in s.lower().split("_"))
+
+
+def to_snake_case(s: str, upper: bool = True) -> str:
+    s = "".join([("_" if c.isupper() else "") + c for c in s]).lstrip("_")
+    return s.upper() if upper else s.lower()
 
 
 DEFAULT_YEAR_INDEX: pd.Index = pd.RangeIndex(1990, 2051, name="year")
@@ -67,18 +73,21 @@ def extrapolate_series(
 def get_column_data_fn(
     csv_name: str,
     index_column: str,
-    default_value_column: str,
+    default_value_column: str | None = None,
     value_column_rename: str | None = None,
     available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
     def get_column_data(
         data_dir: Path,
         # in some cases, we want to load other columns other than the default `value_column`
-        value_column: str = default_value_column,
+        value_column: str | None = default_value_column,
         extrapolate_index: pd.Index | None = None,
         extrapolate_fn: Callable = lambda v, a, b: a + b * v,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
+        if value_column is None:
+            raise ValueError(f"No value_column specified for csv_name={csv_name}. ")
+
         if (
             available_value_columns is not None
             and value_column not in available_value_columns
@@ -143,15 +152,28 @@ get_population_series = get_column_data_fn(
     value_column_rename="population",
 )
 
-get_city_area_series = get_column_data_fn(
-    csv_name="cityArea.csv",
-    index_column="city",
-    default_value_column="area",
+get_city_population_series = get_column_data_fn(
+    csv_name="population_city.csv",
+    index_column="year",
+    value_column_rename="population",
 )
 
 
+def get_city_area_series(data_dir: Path) -> pd.Series:
+    _get_city_area_series: Callable[..., pd.Series] = get_column_data_fn(
+        csv_name="cityArea.csv",
+        index_column="city",
+        default_value_column="area",
+    )
+    s: pd.Series = _get_city_area_series(data_dir=data_dir)
+    s.index = s.index.map(to_snake_case)
+
+    return s
+
+
 def get_vehicle_survival_rate_series(
-    data_dir: Path, vehicle_type: VehicleType
+    data_dir: Path,
+    vehicle_type: VehicleType,
 ) -> pd.Series:
     if vehicle_type not in [
         VehicleType.CAR,
@@ -171,7 +193,10 @@ def get_vehicle_survival_rate_series(
 
 
 def get_vehicle_stock_series(
-    data_dir: Path, vehicle_type: VehicleType, extrapolate_index: pd.Index | None = None
+    data_dir: Path,
+    vehicle_type: VehicleType,
+    city: City | None = None,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.Series:
     if vehicle_type not in [
         VehicleType.CAR,
@@ -185,10 +210,12 @@ def get_vehicle_stock_series(
         raise ValueError(f"Invalid vehicle type: {vehicle_type}")
 
     vehicle: str = vehicle_type.value.lower()
+    city_str: str = "total" if city is None else to_camel_case(city)
+
     _get_vehicle_stock_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name=f"stock/stock_{vehicle}.csv",
         index_column="year",
-        default_value_column="total",
+        default_value_column=city_str,
         value_column_rename="vehicle_stock",
     )
     return _get_vehicle_stock_series(
@@ -237,28 +264,65 @@ def get_vehicle_stock_adjustment_series(
 
 
 def get_income_dataframe(
-    data_dir: Path, extrapolate_index: pd.Index | None = DEFAULT_YEAR_INDEX
+    data_dir: Path,
+    index: pd.Index | None = DEFAULT_YEAR_INDEX,
 ) -> pd.DataFrame:
-    s_income: pd.Series = get_income_series(
-        data_dir=data_dir, extrapolate_index=extrapolate_index
+    s_income: pd.Series = get_income_series(data_dir=data_dir, extrapolate_index=index)
+    s_gini: pd.Series = get_gini_series(data_dir=data_dir, extrapolate_index=index)
+    s_deflation: pd.Series = get_deflation_series(
+        data_dir=data_dir, extrapolate_index=index
     )
-    s_gini: pd.Series = get_gini_series(
-        data_dir=data_dir, extrapolate_index=extrapolate_index
+
+    df: pd.DataFrame = (
+        pd.concat([s_income, s_gini, s_deflation], axis=1).loc[index].sort_index()
+    )
+    df["adjusted_income"] = df.income / (df.deflation / 100)
+
+    return df
+
+
+def get_gdp_dataframe(
+    data_dir: Path,
+    index: pd.Index | None = DEFAULT_YEAR_INDEX,
+) -> pd.DataFrame:
+    s_gdp_per_capita: pd.Series = get_gdp_per_capita_series(
+        data_dir, extrapolate_index=index
     )
     s_deflation: pd.Series = get_deflation_series(
-        data_dir=data_dir, extrapolate_index=extrapolate_index
+        data_dir=data_dir, extrapolate_index=index
     )
 
-    df: pd.DataFrame = pd.concat([s_income, s_gini, s_deflation], axis=1).sort_index()
-    df = df.dropna()
+    df: pd.DataFrame = (
+        pd.concat([s_gdp_per_capita, s_deflation], axis=1).loc[index].sort_index()
+    )
+    df["adjusted_gdp_per_capita"] = df.gdp_per_capita / (df.deflation / 100)
 
-    df["adjusted_income"] = s_income / (s_deflation / 100)
+    return df
+
+
+def get_city_population_dataframe(
+    data_dir: Path,
+    cities: Iterable[City] = City,
+    extrapolate_index: pd.Index | None = DEFAULT_YEAR_INDEX,
+) -> pd.DataFrame:
+    dfs: list[pd.DataFrame] = []
+    for city in cities:
+        s_population: pd.Series = get_city_population_series(
+            data_dir=data_dir,
+            value_column=to_camel_case(city),
+            extrapolate_index=extrapolate_index,
+        )
+        dfs.append(s_population.reset_index().assign(city=city.value))
+
+    df: pd.DataFrame = pd.concat(dfs, ignore_index=True)
+    df = df.set_index(["city", "year"]).sort_index()
 
     return df
 
 
 def get_vehicle_ownership_dataframe(
-    data_dir: Path, vehicle_type: VehicleType
+    data_dir: Path,
+    vehicle_type: VehicleType,
 ) -> pd.DataFrame:
     if vehicle_type not in [VehicleType.CAR, VehicleType.SCOOTER]:
         raise ValueError(f"Invalid vehicle type: {vehicle_type}")

@@ -5,15 +5,23 @@
 # https://www.sciencedirect.com/science/article/pii/S1361920922003686
 
 
+from collections.abc import Callable
 from typing import Any, cast
 
 import numpy as np
 import scipy.optimize
+import sklearn.metrics
 import sympy as sp
 import sympy.stats as sps
+from absl import logging
 
 from app.modules.base import BaseModule, Module
-from app.modules.core import GammaCurveModule, GompertzCurveModule
+from app.modules.core import (
+    GammaCurveModule,
+    GompertzCurveModule,
+    LinearModule,
+    SigmoidCurveModule,
+)
 
 
 # Section 2.2.1: Stock and Sales
@@ -117,7 +125,7 @@ class ScooterOwnershipModule(GammaCurveModule):
         self.ownership = self.y
 
     def output(self) -> dict[str, sp.Basic]:
-        return {"ownership": self.ownership, **super().output()}
+        return {"ownership": self.ownership} | super().output()
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
         income: sp.Float = cast(sp.Float, inputs.pop("income"))
@@ -135,7 +143,7 @@ class ScooterOwnershipModule(GammaCurveModule):
         return params
 
 
-# Section 2.3: Non-private Cars BaseModule
+# Section 2.3: Non-private Cars Module
 class OperatingCarStockModule(GompertzCurveModule):
     def __init__(self):
         super().__init__()
@@ -144,7 +152,7 @@ class OperatingCarStockModule(GompertzCurveModule):
         self.stock = self.y
 
     def output(self) -> dict[str, sp.Basic]:
-        return {"stock": self.y, **super().output()}
+        return {"stock": self.stock} | super().output()
 
     def _fit(self, gdp_per_capita: np.ndarray, stock: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000
@@ -159,3 +167,76 @@ class OperatingCarStockModule(GompertzCurveModule):
         params[self.gamma] *= 1_000_000
 
         return params
+
+
+# Section 2.5: Bus Module
+class BusStockModule(Module):
+    def __init__(self):
+        self.sigmoid_curve = SigmoidCurveModule()
+        self.linear = LinearModule(bias=False)
+
+        self.population_density = self.sigmoid_curve.x
+        self.year = self.linear.x[0]
+
+        self.vehicle_stock_density = self.sigmoid_curve.y + self.linear.y
+
+    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+        population_density: sp.Float = cast(sp.Float, inputs.pop("population_density"))
+        population_density_in_thousands: sp.Float = population_density / 1_000
+
+        _output: dict[str, sp.Basic] = super().__call__(
+            output, population_density=population_density_in_thousands, **inputs
+        )
+        vehicle_stock_density: sp.Float = _output.pop("vehicle_stock_density")
+        return {"vehicle_stock_density": vehicle_stock_density / 1_000} | _output
+
+    def output(self) -> dict[str, sp.Basic]:
+        return {
+            "vehicle_stock_density": self.vehicle_stock_density,
+        }
+
+    def _fit(  # type: ignore
+        self,
+        population_density: np.ndarray,
+        year: np.ndarray,
+        vehicle_stock_density: np.ndarray,
+    ) -> dict[sp.Basic, float]:
+        population_density_in_thousands: np.ndarray = population_density / 1_000
+        vehicle_stock_density_in_milli: np.ndarray = vehicle_stock_density * 1_000
+
+        fn: Callable[[tuple, float, float, float, float], np.ndarray] = sp.lambdify(
+            [
+                (self.population_density, self.year),
+                self.sigmoid_curve.offset,
+                self.sigmoid_curve.beta,
+                self.sigmoid_curve.gamma,
+                self.linear.a[0],
+            ],
+            self.vehicle_stock_density,
+        )
+        (offset, beta, gamma, a_0), _ = scipy.optimize.curve_fit(
+            fn,
+            (population_density_in_thousands, year),
+            vehicle_stock_density_in_milli,
+            p0=[2.4, 0.68, 2.43, 0.017],
+        )
+
+        y: np.ndarray = vehicle_stock_density_in_milli
+        y_pred = np.asarray(
+            [
+                fn((p, y), offset, beta, gamma, a_0)
+                for p, y in zip(population_density_in_thousands, year)
+            ]
+        )
+        r2: float = sklearn.metrics.r2_score(y, y_pred)
+
+        logging.debug(
+            f"Fitted with r2={r2} and parameters: offset={offset}, beta={beta}, gamma={gamma}, a_0={a_0}"
+        )
+
+        return {
+            self.sigmoid_curve.offset: offset,
+            self.sigmoid_curve.beta: beta,
+            self.sigmoid_curve.gamma: gamma,
+            self.linear.a[0]: a_0,
+        }
