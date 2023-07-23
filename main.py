@@ -125,12 +125,10 @@ def tsai_2023_sec_2_2_1_experiment():
         )
         .add(so.Line())
         .scale(
-            color=so.Nominal(
-                ["b", "r", "g"], order=["car", "scooter", "operating_car"]
-            ),
-            marker=so.Nominal([None, "o"], order=[0, 1]),
-            linewidth=so.Nominal([2, 0], order=[0, 1]),
-            linestyle=so.Nominal([(6, 2), "-"], order=[0, 1]),
+            color={"car": "b", "scooter": "r", "operating_car": "g"},
+            marker={0: None, 1: "o"},
+            linewidth={0: 2, 1: 0},
+            linestyle={0: (6, 2), 1: "-"},
         )
         .label(x="Age (year)", y="Survival Rate")
         .layout(size=(6, 4))
@@ -198,6 +196,9 @@ def tsai_2023_sec_2_2_2_experiment():
 def tsai_2023_sec_2_2_3_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
+    bootstrap_runs: int = 100,
+    plot_income_values: Iterable[float] = np.linspace(0, 2_000_000, 1_000),
+    plot_ownership_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
 ):
     logging.info("Running vehicle ownership experiment.")
 
@@ -224,29 +225,41 @@ def tsai_2023_sec_2_2_3_experiment(
         ]
 
         objs.extend(
-            df_vehicle_ownership_to_fit.assign(zorder=1).to_dict(orient="records")
-        )
-
-        module.fit(
-            income=df_vehicle_ownership_to_fit.adjusted_income.values,
-            ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
-            bootstrap=False,
-        )
-        logging.info(module.param_by_symbol)
-
-        for income in np.linspace(0, 2_000_000, 100):
-            output = module(income=income)
-
-            objs.append(
-                {
-                    "zorder": 0,
-                    "adjusted_income": income,
-                    "adjusted_vehicle_ownership": output["ownership"],
-                }
+            df_vehicle_ownership.assign(percentage=-1, zorder=1).to_dict(
+                orient="records"
             )
+        )
+
+        vehicle_ownership_curve_objs: list[dict[str, Any]] = []
+        for run in range(bootstrap_runs):
+            module.fit(
+                income=df_vehicle_ownership_to_fit.adjusted_income.values,
+                ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
+                bootstrap=True,
+            )
+            logging.info(f"Vehicle type: {vehicle_type}, run: {run}.")
+
+            for income in plot_income_values:
+                output = module(income=income)
+
+                vehicle_ownership_curve_objs.append(
+                    {
+                        "adjusted_income": income,
+                        "adjusted_vehicle_ownership": float(output["ownership"]),
+                    }
+                )
+
+        objs.extend(
+            pd.DataFrame(vehicle_ownership_curve_objs)
+            .groupby("adjusted_income")
+            .quantile(plot_ownership_quantiles)
+            .rename_axis(index={None: "percentage"})
+            .reset_index()
+            .assign(zorder=0)
+            .to_dict(orient="records")
+        )
 
         df_plot: pd.DataFrame = pd.DataFrame(objs)
-
         (
             so.Plot(
                 df_plot,
@@ -257,14 +270,17 @@ def tsai_2023_sec_2_2_3_experiment(
                 linewidth="zorder",
                 linestyle="zorder",
             )
-            .add(so.Line())
+            .add(so.Line(), group="percentage")
             .scale(
-                color=so.Nominal(["gray", "b"], order=[0, 1]),
-                marker=so.Nominal([None, "o"], order=[0, 1]),
-                linewidth=so.Nominal([2, 0], order=[0, 1]),
-                linestyle=so.Nominal([(6, 2), "-"], order=[0, 1]),
+                color={0: "gray", 1: "b"},
+                marker={0: None, 1: "o"},
+                linewidth={0: 2, 1: 0},
+                linestyle={0: (6, 2), 1: "-"},
             )
-            .limit(x=(0, 2_000_000), y=(0, 0.8))
+            .limit(
+                x=(np.min(plot_income_values), np.max(plot_income_values)),
+                y=(0, 0.8),
+            )
             .label(x="Disposable Income", y=f"{vehicle.title()} Ownership")
             .layout(size=(6, 4))
             .save(f"tsai-2023-sec-2-2-3-{vehicle}.pdf")
@@ -326,10 +342,10 @@ def tsai_2023_sec_2_3_experiment():
         )
         .add(so.Line())
         .scale(
-            color=so.Nominal(["gray", "b"], order=[0, 1]),
-            marker=so.Nominal([None, "o"], order=[0, 1]),
-            linewidth=so.Nominal([2, 0], order=[0, 1]),
-            linestyle=so.Nominal([(6, 2), "-"], order=[0, 1]),
+            color={0: "gray", 1: "b"},
+            marker={0: None, 1: "o"},
+            linewidth={0: 2, 1: 0},
+            linestyle={0: (6, 2), 1: "-"},
         )
         .label(x="GDP per Capita", y=f"{vehicle.replace('_', ' ').title()} Stock")
         .layout(size=(6, 4))
@@ -394,14 +410,14 @@ def tsai_2023_sec_3_1_experiment(
 def main(_):
     py_logging.getLogger("matplotlib.category").setLevel(py_logging.WARNING)
 
-    logging.set_verbosity(logging.INFO)
+    logging.set_verbosity(logging.DEBUG)
 
-    vehicle_subsidy()
-    tsai_2023_sec_2_2_1_experiment()
-    tsai_2023_sec_2_2_2_experiment()
+    # vehicle_subsidy()
+    # tsai_2023_sec_2_2_1_experiment()
+    # tsai_2023_sec_2_2_2_experiment()
     tsai_2023_sec_2_2_3_experiment()
-    tsai_2023_sec_2_3_experiment()
-    tsai_2023_sec_3_1_experiment()
+    # tsai_2023_sec_2_3_experiment()
+    # tsai_2023_sec_3_1_experiment()
 
 
 if __name__ == "__main__":

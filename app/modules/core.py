@@ -1,9 +1,11 @@
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
 import scipy.optimize
+import sklearn.metrics
 import sympy as sp
-import sympy.stats.rv
+from absl import logging
 
 from app.modules.base import Module
 
@@ -33,11 +35,15 @@ class GompertzCurveModule(Module):
         }
 
     def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
-        (gamma, alpha, beta), _ = scipy.optimize.curve_fit(
-            sp.lambdify([self.x, self.gamma, self.alpha, self.beta], self.y),
-            x,
-            y,
-            **kwargs,
+        fn: Callable[[np.ndarray, float, float, float], np.ndarray] = sp.lambdify(
+            [self.x, self.gamma, self.alpha, self.beta], self.y
+        )
+        (gamma, alpha, beta), _ = scipy.optimize.curve_fit(fn, x, y, **kwargs)
+        y_pred: np.ndarray = np.vectorize(fn)(x, gamma, alpha, beta)
+        r2: float = sklearn.metrics.r2_score(y, y_pred)
+
+        logging.debug(
+            f"Fitted with r2={r2} and parameters: gamma={gamma}, alpha={alpha}, beta={beta}"
         )
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
@@ -69,10 +75,14 @@ class GammaCurveModule(Module):
         }
 
     def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
-        (alpha, beta, C), _ = scipy.optimize.curve_fit(
-            sp.lambdify([self.x, self.alpha, self.beta, self.C], self.y),
-            x,
-            y,
-            **kwargs,
+        fn: Callable[[np.ndarray, float, float, float], np.ndarray] = sp.lambdify(
+            [self.x, self.alpha, self.beta, self.C], self.y
+        )
+        (alpha, beta, C), _ = scipy.optimize.curve_fit(fn, x, y, **kwargs)
+        y_pred: np.ndarray = np.vectorize(fn)(x, alpha, beta, C)
+        r2: float = sklearn.metrics.r2_score(y, y_pred)
+
+        logging.debug(
+            f"Fitted with r2={r2} and parameters: alpha={alpha}, beta={beta}, C={C}"
         )
         return {self.alpha: alpha, self.beta: beta, self.C: C}
