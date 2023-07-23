@@ -18,7 +18,7 @@ class VehicleType(str, enum.Enum):
     HEAVY_TRUCK = "HEAVY_TRUCK"
 
 
-class County(str, enum.Enum):
+class City(str, enum.Enum):
     NEW_TAIPEI = "NEW_TAIPEI"
     TAIPEI = "TAIPEI"
     TAOYUAN = "TAOYUAN"
@@ -120,7 +120,7 @@ get_income_series = get_column_data_fn(
     index_column="year",
     default_value_column="total",
     value_column_rename="income",
-    available_value_columns=itertools.chain(["total"], map(to_camel_case, County)),
+    available_value_columns=itertools.chain(["total"], map(to_camel_case, City)),
 )
 
 get_gdp_per_capita_series = get_column_data_fn(
@@ -141,6 +141,12 @@ get_population_series = get_column_data_fn(
     index_column="year",
     default_value_column="median",
     value_column_rename="population",
+)
+
+get_city_area_series = get_column_data_fn(
+    csv_name="cityArea.csv",
+    index_column="city",
+    default_value_column="area",
 )
 
 

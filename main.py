@@ -15,8 +15,9 @@ from app.data import (
     VehicleType,
     get_income_dataframe,
     get_population_series,
-    get_vehicle_ownership_data,
-    get_vehicle_stock_data,
+    get_tsai_sec_2_2_3_data,
+    get_tsai_sec_2_3_data,
+    get_tsai_sec_2_4_data,
     get_vehicle_stock_series,
     get_vehicle_survival_rate_series,
 )
@@ -215,7 +216,7 @@ def tsai_2023_sec_2_2_3_experiment(
         vehicle_title: str = vehicle_type.replace("_", " ").title()
         logging.info(f"Vehicle type: {vehicle}")
 
-        df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_data(
+        df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
             FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
         )
         df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
@@ -295,7 +296,7 @@ def tsai_2023_sec_2_3_experiment(
     vehicle_type: VehicleType = VehicleType.OPERATING_CAR
     vehicle_title: str = vehicle_type.replace("_", " ").title()
 
-    df_vehicle_stock: pd.DataFrame = get_vehicle_stock_data(
+    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_3_data(
         FLAGS.data_dir, vehicle_type=vehicle_type
     )
     plot_objs: list[dict[str, Any]] = (
@@ -368,11 +369,8 @@ def tsai_2023_sec_2_4_experiment(
     vehicle_type: VehicleType = VehicleType.TRUCK
     vehicle_title: str = vehicle_type.replace("_", " ").title()
 
-    df_vehicle_stock: pd.DataFrame = get_vehicle_stock_data(
+    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_4_data(
         FLAGS.data_dir, vehicle_type=vehicle_type
-    )
-    df_vehicle_stock["log_gdp_per_capita"] = np.log(
-        df_vehicle_stock.adjusted_gdp_per_capita
     )
 
     module = LinearModule(input_dims=2)
@@ -463,7 +461,7 @@ def tsai_2023_sec_3_1_experiment(
     )
 
     df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
-    df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_data(
+    df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
         FLAGS.data_dir, vehicle_type=VehicleType.CAR, income_bins=income_bins_total
     )
     df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[

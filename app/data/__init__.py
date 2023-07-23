@@ -13,4 +13,8 @@ from app.data.core import (
     get_vehicle_stock_series,
     get_vehicle_survival_rate_series,
 )
-from app.data.tsai_2023 import get_vehicle_ownership_data, get_vehicle_stock_data
+from app.data.tsai_2023 import (
+    get_tsai_sec_2_2_3_data,
+    get_tsai_sec_2_3_data,
+    get_tsai_sec_2_4_data,
+)
