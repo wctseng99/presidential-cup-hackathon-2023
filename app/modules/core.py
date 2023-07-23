@@ -2,12 +2,54 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+import scipy.linalg
 import scipy.optimize
 import sklearn.metrics
 import sympy as sp
 from absl import logging
 
 from app.modules.base import Module
+
+
+class LinearModule(Module):
+    def __init__(self, input_dims: int = 1):
+        x = sp.symarray("x", input_dims)
+        a = sp.symarray("a", input_dims)
+        b = sp.Symbol("b")
+
+        y = np.dot(x, a) + b
+
+        self.input_dims = input_dims
+        self.x = x
+        self.a = a
+        for d in range(input_dims):
+            setattr(self, f"x_{d}", x[d])
+            setattr(self, f"a_{d}", a[d])
+        self.b = b
+
+        self.y = y
+
+    def output(self) -> dict[str, sp.Basic]:
+        return {f"a_{d}": self.a[d] for d in range(self.input_dims)} | {
+            "b": self.b,
+            "y": self.y,
+        }
+
+    def _fit(self, X: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
+        (num_samples, input_dims) = X.shape
+        if input_dims != self.input_dims:
+            raise ValueError(f"Expected {self.input_dims} inputs, but got {input_dims}")
+
+        X_one = np.r_["1,2,0", X, np.ones(num_samples)]
+        a_one, _, _, _ = scipy.linalg.lstsq(X_one, y)
+        a = a_one[:-1]
+        b = a_one[-1]
+
+        y_pred: np.ndarray = X_one @ a_one
+        r2: float = sklearn.metrics.r2_score(y, y_pred)
+
+        logging.debug(f"Fitted with r2={r2} and parameters: a={a}, b={b}")
+        return {self.a[d]: a[d] for d in range(self.input_dims)} | {self.b: b}
 
 
 class GompertzCurveModule(Module):

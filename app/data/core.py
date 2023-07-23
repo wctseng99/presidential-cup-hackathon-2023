@@ -1,4 +1,5 @@
 import enum
+import itertools
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -12,8 +13,36 @@ class VehicleType(str, enum.Enum):
     SCOOTER = "SCOOTER"
     OPERATING_CAR = "OPERATING_CAR"
     BUS = "BUS"
+    TRUCK = "TRUCK"
     LIGHT_TRUCK = "LIGHT_TRUCK"
     HEAVY_TRUCK = "HEAVY_TRUCK"
+
+
+class County(str, enum.Enum):
+    NEW_TAIPEI = "NEW_TAIPEI"
+    TAIPEI = "TAIPEI"
+    TAOYUAN = "TAOYUAN"
+    TAICHUNG = "TAICHUNG"
+    TAINAN = "TAINAN"
+    KAOHSIUNG = "KAOHSIUNG"
+    YILAN = "YILAN"
+    HSINCHU = "HSINCHU"
+    MIAOLI = "MIAOLI"
+    CHANGHUA = "CHANGHUA"
+    NANTOU = "NANTOU"
+    YUNLIN = "YUNLIN"
+    CHIAYI = "CHIAYI"
+    PINGTUNG = "PINGTUNG"
+    TAITUNG = "TAITUNG"
+    HUALIEN = "HUALIEN"
+    PENGHU = "PENGHU"
+    KEELUNG = "KEELUNG"
+    HSINCHU_CITY = "HSINCHU_CITY"
+    CHIAYI_CITY = "CHIAYI_CITY"
+
+
+def to_camel_case(s: str) -> str:
+    return "".join(word.capitalize() for word in s.lower().split("_"))
 
 
 DEFAULT_YEAR_INDEX: pd.Index = pd.RangeIndex(1990, 2051, name="year")
@@ -38,20 +67,32 @@ def extrapolate_series(
 def get_column_data_fn(
     csv_name: str,
     index_column: str,
-    value_column: str,
+    default_value_column: str,
     value_column_rename: str | None = None,
+    available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
     def get_column_data(
         data_dir: Path,
+        # in some cases, we want to load other columns other than the default `value_column`
+        value_column: str = default_value_column,
         extrapolate_index: pd.Index | None = None,
         extrapolate_fn: Callable = lambda v, a, b: a + b * v,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
+        if (
+            available_value_columns is not None
+            and value_column not in available_value_columns
+        ):
+            raise ValueError(
+                f"Invalid value_column={value_column} for csv_name={csv_name}. "
+                f"Available value_columns={available_value_columns}"
+            )
+
         csv_path: Path = Path(data_dir, csv_name)
-        df = pd.read_csv(
+        df: pd.DataFrame = pd.read_csv(
             csv_path, index_col=index_column, usecols=[index_column, value_column]
         )
-        s = df[value_column]
+        s: pd.Series = df[value_column]
         if value_column_rename is not None:
             s = s.rename(value_column_rename)
 
@@ -70,34 +111,35 @@ def get_column_data_fn(
 get_deflation_series = get_column_data_fn(
     csv_name="DeflationCoefficient.csv",
     index_column="year",
-    value_column="DeflationCoef",
+    default_value_column="DeflationCoef",
     value_column_rename="deflation",
 )
 
 get_income_series = get_column_data_fn(
     csv_name="income.csv",
     index_column="year",
-    value_column="total",
+    default_value_column="total",
     value_column_rename="income",
+    available_value_columns=itertools.chain(["total"], map(to_camel_case, County)),
 )
 
 get_gdp_per_capita_series = get_column_data_fn(
     csv_name="GDPperCapita.csv",
     index_column="year",
-    value_column="GDPperCapita",
+    default_value_column="GDPperCapita",
     value_column_rename="gdp_per_capita",
 )
 
 get_gini_series = get_column_data_fn(
     csv_name="giniIndex.csv",
     index_column="year",
-    value_column="gini",
+    default_value_column="gini",
 )
 
 get_population_series = get_column_data_fn(
     csv_name="population.csv",
     index_column="year",
-    value_column="median",
+    default_value_column="median",
     value_column_rename="population",
 )
 
@@ -116,7 +158,7 @@ def get_vehicle_survival_rate_series(
     _get_vehicle_survival_rate_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name="survival_rate_original.csv",
         index_column="age",
-        value_column=vehicle,
+        default_value_column=vehicle,
         value_column_rename="survival_rate",
     )
     return _get_vehicle_survival_rate_series(data_dir=data_dir)
@@ -130,6 +172,7 @@ def get_vehicle_stock_series(
         VehicleType.SCOOTER,
         VehicleType.OPERATING_CAR,
         VehicleType.BUS,
+        VehicleType.TRUCK,
         VehicleType.LIGHT_TRUCK,
         VehicleType.HEAVY_TRUCK,
     ]:
@@ -139,7 +182,7 @@ def get_vehicle_stock_series(
     _get_vehicle_stock_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name=f"stock/stock_{vehicle}.csv",
         index_column="year",
-        value_column="total",
+        default_value_column="total",
         value_column_rename="vehicle_stock",
     )
     return _get_vehicle_stock_series(

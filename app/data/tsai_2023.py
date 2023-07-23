@@ -6,6 +6,7 @@ import pandas as pd
 from app.data.core import (
     VehicleType,
     get_deflation_series,
+    get_gdp_per_capita_series,
     get_population_series,
     get_vehicle_ownership_dataframe,
     get_vehicle_stock_adjustment_series,
@@ -65,3 +66,32 @@ def get_vehicle_ownership_data(
     )  # type: ignore
 
     return df_vehicle_ownership_agg
+
+
+def get_vehicle_stock_data(
+    data_dir: Path,
+    vehicle_type: VehicleType,
+) -> pd.DataFrame:
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
+        data_dir, vehicle_type=vehicle_type
+    )
+    index: pd.Index = s_vehicle_stock.index
+
+    s_gdp_per_capita: pd.Series = get_gdp_per_capita_series(
+        data_dir, extrapolate_index=index
+    )
+    s_population: pd.Series = get_population_series(data_dir, extrapolate_index=index)
+    df_vehicle_stock: pd.DataFrame = pd.concat(
+        [s_vehicle_stock, s_gdp_per_capita, s_population], axis=1
+    ).loc[index]
+
+    # adjust gdp
+
+    s_deflation: pd.Series = get_deflation_series(
+        data_dir=data_dir, extrapolate_index=index
+    )
+    df_vehicle_stock["adjusted_gdp_per_capita"] = df_vehicle_stock.gdp_per_capita / (
+        s_deflation.loc[index].values / 100
+    )
+
+    return df_vehicle_stock
