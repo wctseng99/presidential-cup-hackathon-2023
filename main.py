@@ -2,6 +2,7 @@ import itertools
 import logging as py_logging
 import pprint
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 import graphviz as gv
@@ -36,6 +37,7 @@ from app.modules import (
 )
 
 flags.DEFINE_string("data_dir", "./data", "Directory for data.")
+flags.DEFINE_string("result_dir", "./results", "Directory for result.")
 FLAGS = flags.FLAGS
 
 
@@ -137,7 +139,7 @@ def tsai_2023_sec_2_2_1_experiment():
         )
         .label(x="Age (year)", y="Survival Rate")
         .layout(size=(6, 4))
-        .save("tsai-2023-sec-2-2-1.pdf")
+        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-2-1.pdf"))
     )
 
 
@@ -192,7 +194,7 @@ def tsai_2023_sec_2_2_2_experiment(
         .scale(color=dict(zip(plot_years, plot_year_colors)))
         .label(x="Disposable Income", y="Probability Density")
         .layout(size=(6, 4))
-        .save("tsai-2023-sec-2-2-2.pdf")
+        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-2-2.pdf"))
     )
 
 
@@ -286,7 +288,7 @@ def tsai_2023_sec_2_2_3_experiment(
             )
             .label(x="Disposable Income", y=f"{vehicle_title} Ownership")
             .layout(size=(6, 4))
-            .save(f"tsai-2023-sec-2-2-3-{vehicle}.pdf")
+            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-2-3-{vehicle}.pdf"))
         )
 
 
@@ -361,7 +363,7 @@ def tsai_2023_sec_2_3_experiment(
         )
         .label(x="GDP per Capita", y=f"{vehicle_title} Stock")
         .layout(size=(6, 4))
-        .save("tsai-2023-sec-2-3.pdf")
+        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-3.pdf"))
     )
 
 
@@ -408,14 +410,18 @@ def tsai_2023_sec_2_4_experiment(
     plot_objs: list[dict[str, Any]]
 
     for plot_against in ["log_gdp_per_capita", "population"]:
-        name: str
-        xlabel: str
+        name: str | None = None
+        xlabel: str | None = None
         if plot_against == "log_gdp_per_capita":
             name = "gdp"
             xlabel = "Logarithm of GDP per Capita"
+
         elif plot_against == "population":
             name = "population"
             xlabel = "Population"
+
+        assert name is not None
+        assert xlabel is not None
 
         plot_objs = (
             df_vehicle_stock.reset_index()
@@ -452,7 +458,7 @@ def tsai_2023_sec_2_4_experiment(
             )
             .label(x=xlabel, y=f"{vehicle_title} Stock")
             .layout(size=(6, 4))
-            .save(f"tsai-2023-sec-2-4-{name}.pdf")
+            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-4-{name}.pdf"))
         )
 
 
@@ -534,7 +540,7 @@ def tsai_2023_sec_2_5_experiment(
         )
         .label(x="Population Density", y=f"{vehicle_title} Stock Density")
         .layout(size=(6, 4))
-        .save(f"tsai-2023-sec-2-5.pdf")
+        .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-5.pdf"))
     )
 
 
