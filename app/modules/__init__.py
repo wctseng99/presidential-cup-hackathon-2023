@@ -12,5 +12,6 @@ from app.modules.tsai_2023 import (
     IncomeDistributionModule,
     OperatingCarStockModule,
     ScooterOwnershipModule,
+    TruckStockModule,
     VehicleSurvivalRateModule,
 )

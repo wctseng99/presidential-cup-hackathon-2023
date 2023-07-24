@@ -28,9 +28,9 @@ from app.modules import (
     BusStockModule,
     CarOwnershipModule,
     IncomeDistributionModule,
-    LinearModule,
     OperatingCarStockModule,
     ScooterOwnershipModule,
+    TruckStockModule,
     VehicleSubsidyModule,
     VehicleSurvivalRateModule,
 )
@@ -317,7 +317,7 @@ def tsai_2023_sec_2_3_experiment(
 
         module.fit(
             gdp_per_capita=df_vehicle_stock.adjusted_gdp_per_capita.values,
-            stock=df_vehicle_stock.vehicle_stock.values,
+            vehicle_stock=df_vehicle_stock.vehicle_stock.values,
             bootstrap=True,
         )
 
@@ -327,7 +327,7 @@ def tsai_2023_sec_2_3_experiment(
             curve_objs.append(
                 {
                     "adjusted_gdp_per_capita": gdp_per_capita,
-                    "vehicle_stock": float(output["stock"]),
+                    "vehicle_stock": float(output["vehicle_stock"]),
                 }
             )
 
@@ -378,28 +378,30 @@ def tsai_2023_sec_2_4_experiment(
         FLAGS.data_dir, vehicle_type=vehicle_type
     )
 
-    module = LinearModule(input_dims=2)
+    module = TruckStockModule()
 
     curve_objs: list[dict[str, Any]] = []
     for run in range(bootstrap_runs):
         logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
 
         module.fit(
-            X=df_vehicle_stock[["log_gdp_per_capita", "population"]].values,
-            y=df_vehicle_stock.vehicle_stock.values,
+            log_gdp_per_capita=df_vehicle_stock.log_gdp_per_capita.values,
+            population=df_vehicle_stock.population.values,
+            vehicle_stock=df_vehicle_stock.vehicle_stock.values,
             bootstrap=True,
         )
 
         for _, s_vehicle_stock in df_vehicle_stock.iterrows():
             output = module(
-                x_0=s_vehicle_stock.log_gdp_per_capita, x_1=s_vehicle_stock.population
+                log_gdp_per_capita=s_vehicle_stock.log_gdp_per_capita,
+                population=s_vehicle_stock.population,
             )
 
             curve_objs.append(
                 {
                     "log_gdp_per_capita": s_vehicle_stock.log_gdp_per_capita,
                     "population": s_vehicle_stock.population,
-                    "vehicle_stock": float(output["y"]),
+                    "vehicle_stock": float(output["vehicle_stock"]),
                 }
             )
 

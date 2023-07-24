@@ -153,24 +153,49 @@ class OperatingCarStockModule(GompertzCurveModule):
         super().__init__()
 
         self.gdp_per_capita = self.x
-        self.stock = self.y
+        self.vehicle_stock = self.y
 
     def output(self) -> dict[str, sp.Basic]:
-        return {"stock": self.stock} | super().output()
+        return {"vehicle_stock": self.vehicle_stock} | super().output()
 
     def _fit(  # type: ignore
-        self, gdp_per_capita: np.ndarray, stock: np.ndarray
+        self, gdp_per_capita: np.ndarray, vehicle_stock: np.ndarray
     ) -> dict[sp.Basic, float]:
         gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000
-        stock_in_millions: np.ndarray = stock / 1_000_000
+        vehicle_stock_in_millions: np.ndarray = vehicle_stock / 1_000_000
 
         params: dict[sp.Basic, float] = super()._fit(
             x=gdp_per_capita_in_millions,
-            y=stock_in_millions,
+            y=vehicle_stock_in_millions,
             p0=[np.max(gdp_per_capita_in_millions), -80, -8],
         )
         params[self.beta] /= 1_000_000
         params[self.gamma] *= 1_000_000
+
+        return params
+
+
+# Section 2.4: Freight Vehicles Module
+class TruckStockModule(LinearModule):
+    def __init__(self):
+        super().__init__(input_dims=2)
+
+        self.log_gdp_per_capita = self.x[0]
+        self.population = self.x[1]
+
+    def output(self) -> dict[str, sp.Basic]:
+        return {"vehicle_stock": self.y} | super().output()
+
+    def _fit(  # type: ignore
+        self,
+        log_gdp_per_capita: np.ndarray,
+        population: np.ndarray,
+        vehicle_stock: np.ndarray,
+    ) -> dict[sp.Basic, float]:
+        params: dict[sp.Basic, float] = super()._fit(
+            X=np.r_["1,2,0", log_gdp_per_capita, population],
+            y=vehicle_stock,
+        )
 
         return params
 
