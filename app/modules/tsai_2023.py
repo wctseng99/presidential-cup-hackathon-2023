@@ -111,7 +111,9 @@ class CarOwnershipModule(GompertzCurveModule):
         income_in_millions: np.ndarray = income / 1_000_000
 
         params: dict[sp.Basic, float] = super()._fit(
-            x=income_in_millions, y=ownership, p0=[np.max(ownership), -2, -2]
+            x=income_in_millions,
+            y=ownership,
+            p0=[np.max(ownership), -2, -2],
         )
 
         return params
@@ -137,7 +139,9 @@ class ScooterOwnershipModule(GammaCurveModule):
         income_in_millions: np.ndarray = income / 1_000_000
 
         params: dict[sp.Basic, float] = super()._fit(
-            x=income_in_millions, y=ownership, p0=[1.5, 1, 0.1]
+            x=income_in_millions,
+            y=ownership,
+            p0=[1.5, 1, 0.1],
         )
 
         return params
@@ -154,7 +158,9 @@ class OperatingCarStockModule(GompertzCurveModule):
     def output(self) -> dict[str, sp.Basic]:
         return {"stock": self.stock} | super().output()
 
-    def _fit(self, gdp_per_capita: np.ndarray, stock: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+    def _fit(  # type: ignore
+        self, gdp_per_capita: np.ndarray, stock: np.ndarray
+    ) -> dict[sp.Basic, float]:
         gdp_per_capita_in_millions: np.ndarray = gdp_per_capita / 1_000_000
         stock_in_millions: np.ndarray = stock / 1_000_000
 
@@ -187,7 +193,9 @@ class BusStockModule(Module):
         _output: dict[str, sp.Basic] = super().__call__(
             output, population_density=population_density_in_thousands, **inputs
         )
-        vehicle_stock_density: sp.Float = _output.pop("vehicle_stock_density")
+        vehicle_stock_density: sp.Float = cast(
+            sp.Float, _output.pop("vehicle_stock_density")
+        )
         return {"vehicle_stock_density": vehicle_stock_density / 1_000} | _output
 
     def output(self) -> dict[str, sp.Basic]:
