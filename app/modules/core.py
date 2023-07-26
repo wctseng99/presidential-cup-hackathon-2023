@@ -68,39 +68,39 @@ class LinearModule(Module):
 class SigmoidCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
-        offset = sp.Symbol("offset")
-        beta = sp.Symbol("beta")
         gamma = sp.Symbol("gamma")
+        alpha = sp.Symbol("alpha")
+        beta = sp.Symbol("beta")
 
-        y = gamma / (1 + sp.exp(-beta * (x - offset)))
+        y = gamma * (1 - alpha * (1 - 1 / (1 + sp.exp(beta * x))))
 
         self.x = x
-        self.offset = offset
-        self.beta = beta
         self.gamma = gamma
+        self.alpha = alpha
+        self.beta = beta
 
         self.y = y
 
     def output(self) -> dict[str, sp.Basic]:
         return {
-            "offset": self.offset,
-            "beta": self.beta,
             "gamma": self.gamma,
+            "alpha": self.alpha,
+            "beta": self.beta,
             "y": self.y,
         }
 
     def _fit(self, x: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
         fn: Callable[[np.ndarray, float, float, float], np.ndarray] = sp.lambdify(
-            [self.x, self.offset, self.beta, self.gamma], self.y
+            [self.x, self.gamma, self.alpha, self.beta], self.y
         )
-        (offset, beta, gamma), _ = scipy.optimize.curve_fit(fn, x, y, **kwargs)
-        y_pred: np.ndarray = np.vectorize(fn)(x, offset, beta, gamma)
+        (gamma, alpha, beta), _ = scipy.optimize.curve_fit(fn, x, y, **kwargs)
+        y_pred: np.ndarray = np.vectorize(fn)(x, gamma, alpha, beta)
         r2: float = sklearn.metrics.r2_score(y, y_pred)
 
         logging.debug(
-            f"Fitted with r2={r2} and parameters: offset={offset}, beta={beta}, gamma={gamma}"
+            f"Fitted with r2={r2} and parameters: gamma={gamma}, alpha={alpha}, beta={beta}"
         )
-        return {self.offset: offset, self.beta: beta, self.gamma: gamma}
+        return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
 
 class GompertzCurveModule(Module):

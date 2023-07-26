@@ -91,7 +91,7 @@ class IncomeDistributionModule(BaseModule):
 
 
 # Section 2.2.3: Ownership Probability Function
-class CarOwnershipModule(GompertzCurveModule):
+class CarOwnershipMixin(Module):
     def __init__(self):
         super().__init__()
 
@@ -107,6 +107,8 @@ class CarOwnershipModule(GompertzCurveModule):
 
         return super().__call__(output, income=income_in_millions, **inputs)
 
+
+class CarOwnershipModule(CarOwnershipMixin, GompertzCurveModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
@@ -114,6 +116,23 @@ class CarOwnershipModule(GompertzCurveModule):
             x=income_in_millions,
             y=ownership,
             p0=[np.max(ownership), -2, -2],
+        )
+
+        return params
+
+
+class CarOwnershipModuleV2(CarOwnershipMixin, SigmoidCurveModule):
+    def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
+        income_in_millions: np.ndarray = income / 1_000_000
+
+        params: dict[sp.Basic, float] = super()._fit(
+            x=income_in_millions,
+            y=ownership,
+            p0=[
+                np.max(ownership),
+                2 * (1 - np.min(ownership) / np.max(ownership)),
+                -1.0,
+            ],
         )
 
         return params

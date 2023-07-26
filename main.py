@@ -11,6 +11,7 @@ import pandas as pd
 import seaborn.objects as so
 import sympy as sp
 import sympy.stats as sps
+import sympy.stats.rv as sps_rv
 from absl import app, flags, logging
 
 from app.data import (
@@ -27,7 +28,7 @@ from app.data import (
 from app.modules import (
     BaseModule,
     BusStockModule,
-    CarOwnershipModule,
+    CarOwnershipModuleV2,
     IncomeDistributionModule,
     OperatingCarStockModule,
     ScooterOwnershipModule,
@@ -211,7 +212,7 @@ def tsai_2023_sec_2_2_3_experiment(
         module: BaseModule
 
         if vehicle_type == VehicleType.CAR:
-            module = CarOwnershipModule()
+            module = CarOwnershipModuleV2()
         elif vehicle_type == VehicleType.SCOOTER:
             module = ScooterOwnershipModule()
         else:
@@ -547,6 +548,7 @@ def tsai_2023_sec_2_5_experiment(
 def tsai_2023_sec_3_1_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
+    existing_stock_years: Iterable[int] = range(1990, 2021),
     rv_expectation_samples: int = 1000,
 ):
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
@@ -555,17 +557,17 @@ def tsai_2023_sec_3_1_experiment(
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
         FLAGS.data_dir, vehicle_type=VehicleType.CAR
     )
-
     df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
     df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
         FLAGS.data_dir, vehicle_type=VehicleType.CAR, income_bins=income_bins_total
     )
+
+    income_distribution_module = IncomeDistributionModule()
+    car_ownership_module = CarOwnershipModuleV2()
+
     df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
         income_bins_removed:-income_bins_removed
     ]
-
-    income_distribution_module = IncomeDistributionModule()
-    car_ownership_module = CarOwnershipModule()
     car_ownership_module.fit(
         income=df_vehicle_ownership_to_fit.adjusted_income.values,
         ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
@@ -574,11 +576,12 @@ def tsai_2023_sec_3_1_experiment(
 
     years: Iterable[int] = df_income_distribution.index.values
     for year in years:
+        logging.info(f"Running year={year}.")
         s_income_distribution: pd.Series = df_income_distribution.loc[year]
 
         stock_val: int
         output: dict[str, sp.Basic]
-        if year in s_vehicle_stock.index:
+        if year in existing_stock_years:
             stock_val = int(s_vehicle_stock[year])
 
         else:
@@ -586,12 +589,15 @@ def tsai_2023_sec_3_1_experiment(
                 income=s_income_distribution.adjusted_income,
                 gini=s_income_distribution.gini,
             )
-            income_rv: sp.Basic = output["income_rv"]
+
+            income_rv: sps_rv.RandomSymbol = output["income_rv"]
 
             output = car_ownership_module(income=income_rv)
             ownership_rv: sp.Basic = output["ownership"]
 
-            ownership_val = sps.E(ownership_rv, numsamples=rv_expectation_samples)
+            ownership_val = sps_rv.sampling_E(
+                ownership_rv, numsamples=rv_expectation_samples
+            )
             stock_val = int(ownership_val * s_population[year])
 
         logging.info(f"Total stock of cars in {year}: {stock_val}")
@@ -603,13 +609,13 @@ def main(_):
 
     logging.set_verbosity(logging.DEBUG)
 
-    vehicle_subsidy()
-    tsai_2023_sec_2_2_1_experiment()
-    tsai_2023_sec_2_2_2_experiment()
-    tsai_2023_sec_2_2_3_experiment()
-    tsai_2023_sec_2_3_experiment()
-    tsai_2023_sec_2_4_experiment()
-    tsai_2023_sec_2_5_experiment()
+    # vehicle_subsidy()
+    # tsai_2023_sec_2_2_1_experiment()
+    # tsai_2023_sec_2_2_2_experiment()
+    # tsai_2023_sec_2_2_3_experiment()
+    # tsai_2023_sec_2_3_experiment()
+    # tsai_2023_sec_2_4_experiment()
+    # tsai_2023_sec_2_5_experiment()
     tsai_2023_sec_3_1_experiment()
 
 

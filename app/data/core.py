@@ -57,13 +57,20 @@ DEFAULT_YEAR_INDEX: pd.Index = pd.RangeIndex(1990, 2051, name="year")
 def extrapolate_series(
     s: pd.Series,
     index: pd.Index,
-    fn: Callable = lambda v, a, b: a + b * v,
+    fn: Callable | str = lambda v, a, b: a + b * v,
     use_original: bool = True,
 ) -> pd.Series:
-    popt, _ = scipy.optimize.curve_fit(fn, s.index.values, s.values)
-    values: np.ndarray = np.vectorize(fn)(index.values, *popt)
+    s_extrapolated: pd.Series
+    if callable(fn):
+        popt, _ = scipy.optimize.curve_fit(fn, s.index.values, s.values)
+        values: np.ndarray = np.vectorize(fn)(index.values, *popt)
 
-    s_extrapolated: pd.Series = pd.Series(values, index=index)
+        s_extrapolated = pd.Series(values, index=index)
+    elif isinstance(fn, str):
+        s_extrapolated = s.reindex(index).interpolate(method=fn)
+    else:
+        raise NotImplementedError
+
     if use_original:
         return s.combine_first(s_extrapolated)
     else:
@@ -73,16 +80,17 @@ def extrapolate_series(
 def get_column_data_fn(
     csv_name: str,
     index_column: str,
-    default_value_column: str | None = None,
+    value_column: str | None = None,
     value_column_rename: str | None = None,
+    extrapolate_method: Callable | str = lambda v, a, b: a + b * v,
     available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
     def get_column_data(
         data_dir: Path,
         # in some cases, we want to load other columns other than the default `value_column`
-        value_column: str | None = default_value_column,
+        value_column: str | None = value_column,
         extrapolate_index: pd.Index | None = None,
-        extrapolate_fn: Callable = lambda v, a, b: a + b * v,
+        extrapolate_method: Callable | str = extrapolate_method,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
         if value_column is None:
@@ -109,7 +117,7 @@ def get_column_data_fn(
             s = extrapolate_series(
                 s,
                 index=extrapolate_index,
-                fn=extrapolate_fn,
+                fn=extrapolate_method,
                 use_original=extrapolate_use_original,
             )
         return s
@@ -120,14 +128,14 @@ def get_column_data_fn(
 get_deflation_series = get_column_data_fn(
     csv_name="DeflationCoefficient.csv",
     index_column="year",
-    default_value_column="DeflationCoef",
+    value_column="DeflationCoef",
     value_column_rename="deflation",
 )
 
 get_income_series = get_column_data_fn(
     csv_name="income.csv",
     index_column="year",
-    default_value_column="total",
+    value_column="total",
     value_column_rename="income",
     available_value_columns=itertools.chain(["total"], map(to_camel_case, City)),
 )
@@ -135,20 +143,21 @@ get_income_series = get_column_data_fn(
 get_gdp_per_capita_series = get_column_data_fn(
     csv_name="GDPperCapita.csv",
     index_column="year",
-    default_value_column="GDPperCapita",
+    value_column="GDPperCapita",
     value_column_rename="gdp_per_capita",
 )
 
 get_gini_series = get_column_data_fn(
     csv_name="giniIndex.csv",
     index_column="year",
-    default_value_column="gini",
+    value_column="gini",
+    extrapolate_method="pad",
 )
 
 get_population_series = get_column_data_fn(
     csv_name="population.csv",
     index_column="year",
-    default_value_column="median",
+    value_column="median",
     value_column_rename="population",
 )
 
@@ -163,7 +172,7 @@ def get_city_area_series(data_dir: Path) -> pd.Series:
     _get_city_area_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name="cityArea.csv",
         index_column="city",
-        default_value_column="area",
+        value_column="area",
     )
     s: pd.Series = _get_city_area_series(data_dir=data_dir)
     s.index = s.index.map(to_snake_case)
@@ -186,7 +195,7 @@ def get_vehicle_survival_rate_series(
     _get_vehicle_survival_rate_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name="survival_rate_original.csv",
         index_column="age",
-        default_value_column=vehicle,
+        value_column=vehicle,
         value_column_rename="survival_rate",
     )
     return _get_vehicle_survival_rate_series(data_dir=data_dir)
@@ -215,7 +224,7 @@ def get_vehicle_stock_series(
     _get_vehicle_stock_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name=f"stock/stock_{vehicle}.csv",
         index_column="year",
-        default_value_column=city_str,
+        value_column=city_str,
         value_column_rename="vehicle_stock",
     )
     return _get_vehicle_stock_series(

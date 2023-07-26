@@ -9,6 +9,7 @@ from app.modules.nie_2022 import VehicleSubsidyModule
 from app.modules.tsai_2023 import (
     BusStockModule,
     CarOwnershipModule,
+    CarOwnershipModuleV2,
     IncomeDistributionModule,
     OperatingCarStockModule,
     ScooterOwnershipModule,
