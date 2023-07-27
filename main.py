@@ -18,7 +18,7 @@ import sympy.stats as sps
 from absl import app, flags, logging
 
 from app.data import (
-    VehicleType,
+    Vehicle,
     get_gini_series,
     get_income_dataframe,
     get_population_series,
@@ -105,16 +105,10 @@ def tsai_2023_sec_2_2_1_experiment(
 
     plot_objs: list[dict[str, Any]] = []
 
-    for vehicle_type in rp.track(
-        [VehicleType.CAR, VehicleType.SCOOTER, VehicleType.OPERATING_CAR]
-    ):
-        vehicle: str = vehicle_type.value.lower()
-
+    for vehicle in rp.track([Vehicle.CAR, Vehicle.SCOOTER, Vehicle.OPERATING_CAR]):
         # data
 
-        s: pd.Series = get_vehicle_survival_rate_series(
-            FLAGS.data_dir, vehicle_type=vehicle_type
-        )
+        s: pd.Series = get_vehicle_survival_rate_series(FLAGS.data_dir, vehicle=vehicle)
         plot_objs.extend(
             s.reset_index()
             .assign(vehicle=vehicle, group=PlotGroup.EXISTING)
@@ -255,15 +249,15 @@ def tsai_2023_sec_2_2_3_experiment(
 ):
     logging.info("Running Tsai 2023 Section 2.2.3 experiment.")
 
-    for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
-        vehicle: str = vehicle_type.value.lower()
-        vehicle_title: str = vehicle_type.replace("_", " ").title()
-        logging.info(f"Vehicle type: {vehicle}")
+    for vehicle in [Vehicle.CAR, Vehicle.SCOOTER]:
+        vehicle_str: str = vehicle.value.lower()
+        vehicle_title: str = vehicle.replace("_", " ").title()
+        logging.info(f"Vehicle type: {vehicle_str}")
 
         # data
 
         df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
+            FLAGS.data_dir, vehicle=vehicle, income_bins=income_bins_total
         )
         df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.head(
             -income_bins_removed
@@ -278,12 +272,12 @@ def tsai_2023_sec_2_2_3_experiment(
         # module
 
         module: CarOwnershipModuleV2 | ScooterOwnershipModule
-        if vehicle_type == VehicleType.CAR:
+        if vehicle == Vehicle.CAR:
             module = CarOwnershipModuleV2()
-        elif vehicle_type == VehicleType.SCOOTER:
+        elif vehicle == Vehicle.SCOOTER:
             module = ScooterOwnershipModule()
         else:
-            raise ValueError(f"Unknown vehicle type: {vehicle_type}.")
+            raise ValueError(f"Unknown vehicle_str type: {vehicle}.")
 
         bootstrap_module = BootstrapModule(module=module, runs=bootstrap_runs)
         bootstrap_module.fit(
@@ -351,7 +345,7 @@ def tsai_2023_sec_2_2_3_experiment(
             )
             .label(x="Disposable Income", y=f"{vehicle_title} Ownership")
             .layout(size=(6, 4))
-            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-2-3-{vehicle}.pdf"))
+            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-2-3-{vehicle_str}.pdf"))
         )
 
 
@@ -362,13 +356,13 @@ def tsai_2023_sec_2_3_experiment(
 ):
     logging.info("Running Tsai 2023 Section 2.3 experiment.")
 
-    vehicle_type: VehicleType = VehicleType.OPERATING_CAR
-    vehicle_title: str = vehicle_type.replace("_", " ").title()
+    vehicle: Vehicle = Vehicle.OPERATING_CAR
+    vehicle_title: str = vehicle.replace("_", " ").title()
 
     # data
 
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_3_data(
-        FLAGS.data_dir, vehicle_type=vehicle_type
+        FLAGS.data_dir, vehicle=vehicle
     )
     plot_objs: list[dict[str, Any]] = (
         df_vehicle_stock.reset_index()
@@ -449,13 +443,13 @@ def tsai_2023_sec_2_4_experiment(
 ):
     logging.info("Running Tsai 2023 Section 2.4 experiment.")
 
-    vehicle_type: VehicleType = VehicleType.TRUCK
-    vehicle_title: str = vehicle_type.replace("_", " ").title()
+    vehicle: Vehicle = Vehicle.TRUCK
+    vehicle_title: str = vehicle.replace("_", " ").title()
 
     # data
 
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_4_data(
-        FLAGS.data_dir, vehicle_type=vehicle_type
+        FLAGS.data_dir, vehicle=vehicle
     )
 
     # module
@@ -561,13 +555,13 @@ def tsai_2023_sec_2_5_experiment(
 ):
     logging.info("Running Tsai 2023 Section 2.5 experiment.")
 
-    vehicle_type: VehicleType = VehicleType.BUS
-    vehicle_title: str = vehicle_type.replace("_", " ").title()
+    vehicle: Vehicle = Vehicle.BUS
+    vehicle_title: str = vehicle.replace("_", " ").title()
 
     # data
 
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_5_data(
-        data_dir=FLAGS.data_dir, vehicle_type=vehicle_type
+        data_dir=FLAGS.data_dir, vehicle=vehicle
     )
     min_year: int = df_vehicle_stock.year.min()
 
@@ -668,15 +662,15 @@ def tsai_2023_sec_3_1_experiment(
 
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
 
-    vehicle_type: VehicleType = VehicleType.CAR
-    vehicle_str: str = vehicle_type.value.lower()
-    vehicle_title: str = vehicle_type.replace("_", " ").title()
+    vehicle: Vehicle = Vehicle.CAR
+    vehicle_str: str = vehicle.value.lower()
+    vehicle_title: str = vehicle.replace("_", " ").title()
 
     # data
 
     s_population: pd.Series = get_population_series(FLAGS.data_dir)
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        FLAGS.data_dir, vehicle_type=vehicle_type
+        FLAGS.data_dir, vehicle=vehicle
     )
 
     # make sure gini is extrapolated to the desired years
@@ -686,7 +680,7 @@ def tsai_2023_sec_3_1_experiment(
 
     df_income: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir, index=None)
     df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-        FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
+        FLAGS.data_dir, vehicle=vehicle, income_bins=income_bins_total
     )
 
     # module
@@ -887,7 +881,7 @@ def main(_):
     tsai_2023_sec_2_3_experiment()
     tsai_2023_sec_2_4_experiment()
     tsai_2023_sec_2_5_experiment()
-    tsai_2023_sec_3_1_experiment()
+    # tsai_2023_sec_3_1_experiment()
 
 
 if __name__ == "__main__":

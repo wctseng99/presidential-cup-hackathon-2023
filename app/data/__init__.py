@@ -1,5 +1,5 @@
 from app.data.core import (
-    VehicleType,
+    Vehicle,
     extrapolate_series,
     get_city_population_dataframe,
     get_column_data_fn,

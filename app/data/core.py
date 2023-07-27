@@ -8,7 +8,7 @@ import pandas as pd
 import scipy.optimize
 
 
-class VehicleType(str, enum.Enum):
+class Vehicle(str, enum.Enum):
     CAR = "CAR"
     SCOOTER = "SCOOTER"
     OPERATING_CAR = "OPERATING_CAR"
@@ -190,20 +190,20 @@ def get_city_area_series(data_dir: Path) -> pd.Series:
 
 def get_vehicle_survival_rate_series(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
 ) -> pd.Series:
-    if vehicle_type not in [
-        VehicleType.CAR,
-        VehicleType.SCOOTER,
-        VehicleType.OPERATING_CAR,
+    if vehicle not in [
+        Vehicle.CAR,
+        Vehicle.SCOOTER,
+        Vehicle.OPERATING_CAR,
     ]:
-        raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+        raise ValueError(f"Invalid vehicle_str type: {vehicle}")
 
-    vehicle: str = vehicle_type.value.lower()
+    vehicle_str: str = vehicle.value.lower()
     _get_vehicle_survival_rate_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name="survival_rate_original.csv",
         index_column="age",
-        value_column=vehicle,
+        value_column=vehicle_str,
         value_column_rename="survival_rate",
     )
     return _get_vehicle_survival_rate_series(data_dir=data_dir)
@@ -211,26 +211,26 @@ def get_vehicle_survival_rate_series(
 
 def get_vehicle_stock_series(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
     city: City | None = None,
     extrapolate_index: pd.Index | None = None,
 ) -> pd.Series:
-    if vehicle_type not in [
-        VehicleType.CAR,
-        VehicleType.SCOOTER,
-        VehicleType.OPERATING_CAR,
-        VehicleType.BUS,
-        VehicleType.TRUCK,
-        VehicleType.LIGHT_TRUCK,
-        VehicleType.HEAVY_TRUCK,
+    if vehicle not in [
+        Vehicle.CAR,
+        Vehicle.SCOOTER,
+        Vehicle.OPERATING_CAR,
+        Vehicle.BUS,
+        Vehicle.TRUCK,
+        Vehicle.LIGHT_TRUCK,
+        Vehicle.HEAVY_TRUCK,
     ]:
-        raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+        raise ValueError(f"Invalid vehicle_str type: {vehicle}")
 
-    vehicle: str = vehicle_type.value.lower()
+    vehicle_str: str = vehicle.value.lower()
     city_str: str = "total" if city is None else to_camel_case(city)
 
     _get_vehicle_stock_series: Callable[..., pd.Series] = get_column_data_fn(
-        csv_name=f"stock/stock_{vehicle}.csv",
+        csv_name=f"stock/stock_{vehicle_str}.csv",
         index_column="year",
         value_column=city_str,
         value_column_rename="vehicle_stock",
@@ -241,10 +241,10 @@ def get_vehicle_stock_series(
 
 
 def get_vehicle_stock_adjustment_series(
-    vehicle_type: VehicleType, extrapolate_index: pd.Index | None = None
+    vehicle: Vehicle, extrapolate_index: pd.Index | None = None
 ) -> pd.Series:
-    match vehicle_type:
-        case VehicleType.CAR:
+    match vehicle:
+        case Vehicle.CAR:
             data = {
                 2010: 0.2104,
                 2011: 0.2164,
@@ -257,7 +257,7 @@ def get_vehicle_stock_adjustment_series(
                 2018: 0.2389,
             }
 
-        case VehicleType.SCOOTER:
+        case Vehicle.SCOOTER:
             data = {
                 2010: 0.4447,
                 2011: 0.4533,
@@ -270,7 +270,7 @@ def get_vehicle_stock_adjustment_series(
                 2018: 0.5091,
             }
         case _:
-            raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+            raise ValueError(f"Invalid vehicle type: {vehicle}")
 
     s = pd.Series(data, name="vehicle_stock_adjustment")
     s.index.name = "year"
@@ -340,12 +340,12 @@ def get_city_population_dataframe(
 
 def get_vehicle_ownership_dataframe(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
 ) -> pd.DataFrame:
-    if vehicle_type not in [VehicleType.CAR, VehicleType.SCOOTER]:
-        raise ValueError(f"Invalid vehicle type: {vehicle_type}")
+    if vehicle not in [Vehicle.CAR, Vehicle.SCOOTER]:
+        raise ValueError(f"Invalid vehicle_str type: {vehicle}")
 
-    vehicle: str = vehicle_type.value.lower()
+    vehicle_str: str = vehicle.value.lower()
     csv_paths: Iterable[Path] = Path(data_dir, "GompertzData").glob("????.csv")
 
     dfs: list[pd.DataFrame] = []
@@ -353,10 +353,12 @@ def get_vehicle_ownership_dataframe(
         year: int = int(csv_path.stem)
 
         df: pd.DataFrame = pd.read_csv(csv_path, index_col=["id"])
-        if vehicle not in df.columns:
+        if vehicle_str not in df.columns:
             continue
 
-        df = df[["income", vehicle]].rename({vehicle: "vehicle_ownership"}, axis=1)
+        df = df[["income", vehicle_str]].rename(
+            {vehicle_str: "vehicle_ownership"}, axis=1
+        )
         df = df.assign(year=year)
 
         dfs.append(df)

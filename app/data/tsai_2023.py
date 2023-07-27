@@ -6,7 +6,7 @@ import pandas as pd
 
 from app.data.core import (
     City,
-    VehicleType,
+    Vehicle,
     get_city_area_series,
     get_city_population_dataframe,
     get_deflation_series,
@@ -20,11 +20,11 @@ from app.data.core import (
 
 def get_tsai_sec_2_2_3_data(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
     income_bins: int = 100,
 ) -> pd.DataFrame:
     df_vehicle_ownership: pd.DataFrame = get_vehicle_ownership_dataframe(
-        data_dir=data_dir, vehicle_type=vehicle_type
+        data_dir=data_dir, vehicle=vehicle
     )
     index: pd.Index = pd.Index(df_vehicle_ownership.year.sort_values().unique())
 
@@ -44,10 +44,10 @@ def get_tsai_sec_2_2_3_data(
         data_dir=data_dir, extrapolate_index=index
     )
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        data_dir=data_dir, vehicle_type=vehicle_type, extrapolate_index=index
+        data_dir=data_dir, vehicle=vehicle, extrapolate_index=index
     )
     s_vehicle_stock_adjustment: pd.Series = get_vehicle_stock_adjustment_series(
-        vehicle_type=vehicle_type, extrapolate_index=index
+        vehicle=vehicle, extrapolate_index=index
     )
     s: pd.Series = s_vehicle_stock / (s_population * s_vehicle_stock_adjustment)
 
@@ -74,11 +74,9 @@ def get_tsai_sec_2_2_3_data(
 
 def get_tsai_sec_2_3_data(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
 ) -> pd.DataFrame:
-    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        data_dir, vehicle_type=vehicle_type
-    )
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(data_dir, vehicle=vehicle)
     index: pd.Index = s_vehicle_stock.index
 
     df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir, index=index)
@@ -89,11 +87,9 @@ def get_tsai_sec_2_3_data(
 
 def get_tsai_sec_2_4_data(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
 ) -> pd.DataFrame:
-    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        data_dir, vehicle_type=vehicle_type
-    )
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(data_dir, vehicle=vehicle)
     index: pd.Index = s_vehicle_stock.index
 
     s_population: pd.Series = get_population_series(data_dir, extrapolate_index=index)
@@ -107,7 +103,7 @@ def get_tsai_sec_2_4_data(
 
 def get_tsai_sec_2_5_data(
     data_dir: Path,
-    vehicle_type: VehicleType,
+    vehicle: Vehicle,
     exclude_cities: set[City] = set([City.JINMA]),
 ) -> pd.DataFrame:
     df_vehicle_stock: pd.DataFrame
@@ -117,7 +113,7 @@ def get_tsai_sec_2_5_data(
             continue
 
         s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-            data_dir, vehicle_type=vehicle_type, city=city
+            data_dir, vehicle=vehicle, city=city
         )
         df_vehicle_stocks.append(s_vehicle_stock.reset_index().assign(city=city.value))
 
