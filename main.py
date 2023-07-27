@@ -10,6 +10,7 @@ from typing import Any
 import graphviz as gv
 import numpy as np
 import pandas as pd
+import rich.progress as rp
 import scipy.integrate
 import seaborn.objects as so
 import sympy as sp
@@ -29,7 +30,7 @@ from app.data import (
     get_vehicle_survival_rate_series,
 )
 from app.modules import (
-    BaseModule,
+    BootstrapModule,
     BusStockModule,
     CarOwnershipModuleV2,
     IncomeDistributionModule,
@@ -44,6 +45,14 @@ from app.modules import (
 flags.DEFINE_string("data_dir", "./data", "Directory for data.")
 flags.DEFINE_string("result_dir", "./results", "Directory for result.")
 FLAGS = flags.FLAGS
+
+
+class PlotGroup(int, enum.Enum):
+    PREDICTION = 0
+    EXISTING = 1
+    PREDICTION_OF_EXISTING = 2
+    PREDICTION_CI_LOW = 3
+    PREDICTION_CI_HIGH = 4
 
 
 def vehicle_subsidy():
@@ -89,58 +98,81 @@ def vehicle_subsidy():
     gv.Source(dot_str).render("total_budget.gv", format="png")
 
 
-def tsai_2023_sec_2_2_1_experiment():
+def tsai_2023_sec_2_2_1_experiment(
+    plot_age_values: Iterable[float] = np.linspace(0, 30, 100),
+):
     logging.info("Running Tsai 2023 Section 2.2.1 experiment.")
 
-    objs: list[dict[str, Any]] = []
+    plot_objs: list[dict[str, Any]] = []
 
-    for vehicle_type in [
-        VehicleType.CAR,
-        VehicleType.SCOOTER,
-        VehicleType.OPERATING_CAR,
-    ]:
+    for vehicle_type in rp.track(
+        [VehicleType.CAR, VehicleType.SCOOTER, VehicleType.OPERATING_CAR]
+    ):
         vehicle: str = vehicle_type.value.lower()
+
+        # data
 
         s: pd.Series = get_vehicle_survival_rate_series(
             FLAGS.data_dir, vehicle_type=vehicle_type
         )
-        objs.extend(
-            s.reset_index().assign(vehicle=vehicle, zorder=1).to_dict(orient="records")
+        plot_objs.extend(
+            s.reset_index()
+            .assign(vehicle=vehicle, group=PlotGroup.EXISTING)
+            .to_dict(orient="records")
         )
+
+        # module
 
         module = VehicleSurvivalRateModule()
         module.fit(age=s.index.values, survival_rate=s.values, bootstrap=False)
 
-        for age in np.linspace(0, 30):
-            output = module(age=age)
+        survival_rate_values = np.vectorize(module)(
+            output=module.survival_rate, age=plot_age_values
+        )
 
-            objs.append(
+        plot_objs.extend(
+            pd.DataFrame(
                 {
-                    "zorder": 0,
-                    "age": age,
-                    "survival_rate": output["survival_rate"],
-                    "vehicle": vehicle,
+                    "age": plot_age_values,
+                    "survival_rate": survival_rate_values,
                 }
             )
+            .assign(vehicle=vehicle, group=PlotGroup.PREDICTION)
+            .to_dict(orient="records")
+        )
 
-    df_plot: pd.DataFrame = pd.DataFrame(objs)
+    # plotting
 
+    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
     (
         so.Plot(
             df_plot,
             x="age",
             y="survival_rate",
             color="vehicle",
-            marker="zorder",
-            linewidth="zorder",
-            linestyle="zorder",
+            marker="group",
+            linewidth="group",
+            linestyle="group",
         )
         .add(so.Line())
         .scale(
-            color={"car": "b", "scooter": "r", "operating_car": "g"},
-            marker={0: None, 1: "o"},
-            linewidth={0: 2, 1: 0},
-            linestyle={0: (6, 2), 1: "-"},
+            color={
+                "car": "b",
+                "scooter": "r",
+                "operating_car": "g",
+            },
+            marker={
+                PlotGroup.PREDICTION: None,
+                PlotGroup.EXISTING: "o",
+            },
+            linewidth={
+                PlotGroup.PREDICTION: 2,
+                PlotGroup.EXISTING: 0,
+            },
+            linestyle={
+                PlotGroup.PREDICTION: (6, 2),
+                PlotGroup.EXISTING: "-",
+            },
         )
         .label(x="Age (year)", y="Survival Rate")
         .layout(size=(6, 4))
@@ -158,34 +190,45 @@ def tsai_2023_sec_2_2_2_experiment(
         "tab:purple",
         "tab:brown",
     ],
-    plot_income_values: Iterable[float] = np.linspace(0, 1_000_000, 1_000),
+    plot_income_values: Iterable[float] = np.linspace(0, 1_000_000, 100),
 ):
     logging.info("Running Tsai 2023 Section 2.2.2 experiment.")
 
-    df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
+    # data
+
+    df_income: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
+
+    # module
+
     income_distribution_module = IncomeDistributionModule()
 
     plot_objs: list[Any] = []
     for year in plot_years:
         logging.info(f"Running year {year}.")
 
-        s_income_distribution: pd.Series = df_income_distribution.loc[year]
+        s_income: pd.Series = df_income.loc[year]
 
-        output = income_distribution_module(
-            income=s_income_distribution.adjusted_income,
-            gini=s_income_distribution.gini,
+        income_rv = income_distribution_module(
+            output=income_distribution_module.income_rv,
+            mean_income=s_income.adjusted_income,
+            gini=s_income.gini,
         )
-        income_rv: sp.Basic = output["income_rv"]
+        income_pdf_values = np.vectorize(
+            lambda income: sps.density(income_rv)(income).evalf()
+        )(plot_income_values)
 
-        for income in plot_income_values:
-            income_pdf: float = sps.density(income_rv)(income).evalf()
-            plot_objs.append(
+        plot_objs.extend(
+            pd.DataFrame(
                 {
-                    "year": year,
-                    "income": income,
-                    "income_pdf": income_pdf,
+                    "income": plot_income_values,
+                    "income_pdf": income_pdf_values,
                 }
             )
+            .assign(year=year)
+            .to_dict(orient="records")
+        )
+
+    # plotting
 
     df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
     (
@@ -207,14 +250,34 @@ def tsai_2023_sec_2_2_3_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
     bootstrap_runs: int = 100,
-    plot_income_values: Iterable[float] = np.linspace(0, 2_000_000, 1_000),
+    plot_income_values: Iterable[float] = np.linspace(0, 2_000_000, 100),
     plot_ownership_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
 ):
     logging.info("Running Tsai 2023 Section 2.2.3 experiment.")
 
     for vehicle_type in [VehicleType.CAR, VehicleType.SCOOTER]:
-        module: BaseModule
+        vehicle: str = vehicle_type.value.lower()
+        vehicle_title: str = vehicle_type.replace("_", " ").title()
+        logging.info(f"Vehicle type: {vehicle}")
 
+        # data
+
+        df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
+            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
+        )
+        df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.head(
+            -income_bins_removed
+        ).tail(-income_bins_removed)
+
+        plot_objs: list[dict[str, Any]] = (
+            df_vehicle_ownership.reset_index()
+            .assign(percentage=-1, group=PlotGroup.EXISTING)
+            .to_dict(orient="records")
+        )
+
+        # module
+
+        module: CarOwnershipModuleV2 | ScooterOwnershipModule
         if vehicle_type == VehicleType.CAR:
             module = CarOwnershipModuleV2()
         elif vehicle_type == VehicleType.SCOOTER:
@@ -222,55 +285,35 @@ def tsai_2023_sec_2_2_3_experiment(
         else:
             raise ValueError(f"Unknown vehicle type: {vehicle_type}.")
 
-        vehicle: str = vehicle_type.value.lower()
-        vehicle_title: str = vehicle_type.replace("_", " ").title()
-        logging.info(f"Vehicle type: {vehicle}")
-
-        df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-            FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
-        )
-        if income_bins_removed:
-            df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
-                income_bins_removed:-income_bins_removed
-            ]
-        else:
-            df_vehicle_ownership_to_fit = df_vehicle_ownership
-
-        plot_objs: list[dict[str, Any]] = (
-            df_vehicle_ownership.reset_index()
-            .assign(percentage=-1, zorder=1)
-            .to_dict(orient="records")
+        bootstrap_module = BootstrapModule(module=module, runs=bootstrap_runs)
+        bootstrap_module.fit(
+            income=df_vehicle_ownership_to_fit.adjusted_income.values,
+            ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
         )
 
-        curve_objs: list[dict[str, Any]] = []
-        for run in range(bootstrap_runs):
-            logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+        # predictions
 
-            module.fit(
-                income=df_vehicle_ownership_to_fit.adjusted_income.values,
-                ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
-                bootstrap=True,
+        df_predictions: list[pd.DataFrame] = []
+        for income in plot_income_values:
+            ownership_values = bootstrap_module(output=module.ownership, income=income)
+
+            df_predictions.append(
+                pd.DataFrame(
+                    {"adjusted_vehicle_ownership": map(float, ownership_values)}
+                ).assign(adjusted_income=income)
             )
 
-            for income in plot_income_values:
-                output = module(income=income)
-
-                curve_objs.append(
-                    {
-                        "adjusted_income": income,
-                        "adjusted_vehicle_ownership": float(output["ownership"]),
-                    }
-                )
-
         plot_objs.extend(
-            pd.DataFrame(curve_objs)
+            pd.concat(df_predictions, ignore_index=True)
             .groupby("adjusted_income")
             .quantile(plot_ownership_quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
-            .assign(zorder=0)
+            .assign(group=PlotGroup.PREDICTION)
             .to_dict(orient="records")
         )
+
+        # plotting
 
         df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
         (
@@ -278,17 +321,29 @@ def tsai_2023_sec_2_2_3_experiment(
                 df_plot,
                 x="adjusted_income",
                 y="adjusted_vehicle_ownership",
-                color="zorder",
-                marker="zorder",
-                linewidth="zorder",
-                linestyle="zorder",
+                color="group",
+                marker="group",
+                linewidth="group",
+                linestyle="group",
             )
             .add(so.Line(), group="percentage")
             .scale(
-                color={0: "gray", 1: "b"},
-                marker={0: None, 1: "o"},
-                linewidth={0: 2, 1: 0},
-                linestyle={0: (6, 2), 1: "-"},
+                color={
+                    PlotGroup.EXISTING: "b",
+                    PlotGroup.PREDICTION: "gray",
+                },
+                marker={
+                    PlotGroup.EXISTING: "o",
+                    PlotGroup.PREDICTION: None,
+                },
+                linewidth={
+                    PlotGroup.EXISTING: 0,
+                    PlotGroup.PREDICTION: 2,
+                },
+                linestyle={
+                    PlotGroup.EXISTING: "-",
+                    PlotGroup.PREDICTION: (6, 2),
+                },
             )
             .limit(
                 x=(np.min(plot_income_values), np.max(plot_income_values)),
@@ -310,44 +365,45 @@ def tsai_2023_sec_2_3_experiment(
     vehicle_type: VehicleType = VehicleType.OPERATING_CAR
     vehicle_title: str = vehicle_type.replace("_", " ").title()
 
+    # data
+
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_3_data(
         FLAGS.data_dir, vehicle_type=vehicle_type
     )
     plot_objs: list[dict[str, Any]] = (
         df_vehicle_stock.reset_index()
-        .assign(percentage=-1, zorder=1)
+        .assign(percentage=-1, group=PlotGroup.EXISTING)
         .to_dict(orient="records")
     )
 
+    # module
+
     module = OperatingCarStockModule()
+    bootstrap_module = BootstrapModule(module=module, runs=bootstrap_runs)
+    bootstrap_module.fit(
+        gdp_per_capita=df_vehicle_stock.adjusted_gdp_per_capita.values,
+        vehicle_stock=df_vehicle_stock.vehicle_stock.values,
+    )
 
-    curve_objs: list[dict[str, Any]] = []
-    for run in range(bootstrap_runs):
-        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
-
-        module.fit(
-            gdp_per_capita=df_vehicle_stock.adjusted_gdp_per_capita.values,
-            vehicle_stock=df_vehicle_stock.vehicle_stock.values,
-            bootstrap=True,
+    df_predictions: list[pd.DataFrame] = []
+    for gdp_per_capita in plot_gdp_per_capita_values:
+        vehicle_stock_values = bootstrap_module(
+            output=module.vehicle_stock, gdp_per_capita=gdp_per_capita
         )
 
-        for gdp_per_capita in plot_gdp_per_capita_values:
-            output = module(gdp_per_capita=gdp_per_capita)
-
-            curve_objs.append(
-                {
-                    "adjusted_gdp_per_capita": gdp_per_capita,
-                    "vehicle_stock": float(output["vehicle_stock"]),
-                }
+        df_predictions.append(
+            pd.DataFrame({"vehicle_stock": map(float, vehicle_stock_values)}).assign(
+                adjusted_gdp_per_capita=gdp_per_capita
             )
+        )
 
     plot_objs.extend(
-        pd.DataFrame(curve_objs)
+        pd.concat(df_predictions, ignore_index=True)
         .groupby("adjusted_gdp_per_capita")
         .quantile(plot_stock_quantiles)
         .rename_axis(index={None: "percentage"})
         .reset_index()
-        .assign(zorder=0)
+        .assign(group=PlotGroup.PREDICTION)
         .to_dict(orient="records")
     )
 
@@ -357,17 +413,29 @@ def tsai_2023_sec_2_3_experiment(
             df_plot,
             x="adjusted_gdp_per_capita",
             y="vehicle_stock",
-            color="zorder",
-            marker="zorder",
-            linewidth="zorder",
-            linestyle="zorder",
+            color="group",
+            marker="group",
+            linewidth="group",
+            linestyle="group",
         )
         .add(so.Line(), group="percentage")
         .scale(
-            color={0: "gray", 1: "b"},
-            marker={0: None, 1: "o"},
-            linewidth={0: 2, 1: 0},
-            linestyle={0: (6, 2), 1: "-"},
+            color={
+                PlotGroup.EXISTING: "b",
+                PlotGroup.PREDICTION: "gray",
+            },
+            marker={
+                PlotGroup.EXISTING: "o",
+                PlotGroup.PREDICTION: None,
+            },
+            linewidth={
+                PlotGroup.EXISTING: 0,
+                PlotGroup.PREDICTION: 2,
+            },
+            linestyle={
+                PlotGroup.EXISTING: "-",
+                PlotGroup.PREDICTION: (6, 2),
+            },
         )
         .label(x="GDP per Capita", y=f"{vehicle_title} Stock")
         .layout(size=(6, 4))
@@ -384,39 +452,42 @@ def tsai_2023_sec_2_4_experiment(
     vehicle_type: VehicleType = VehicleType.TRUCK
     vehicle_title: str = vehicle_type.replace("_", " ").title()
 
+    # data
+
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_4_data(
         FLAGS.data_dir, vehicle_type=vehicle_type
     )
 
+    # module
+
     module = TruckStockModule()
+    bootstrap_module = BootstrapModule(module=module, runs=bootstrap_runs)
+    bootstrap_module.fit(
+        log_gdp_per_capita=df_vehicle_stock.log_gdp_per_capita.values,
+        population=df_vehicle_stock.population.values,
+        vehicle_stock=df_vehicle_stock.vehicle_stock.values,
+    )
 
-    curve_objs: list[dict[str, Any]] = []
-    for run in range(bootstrap_runs):
-        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+    # predictions
 
-        module.fit(
-            log_gdp_per_capita=df_vehicle_stock.log_gdp_per_capita.values,
-            population=df_vehicle_stock.population.values,
-            vehicle_stock=df_vehicle_stock.vehicle_stock.values,
-            bootstrap=True,
+    df_predictions: list[pd.DataFrame] = []
+    for _, s_vehicle_stock in df_vehicle_stock.iterrows():
+        vehicle_stock_values = bootstrap_module(
+            output=module.vehicle_stock,
+            log_gdp_per_capita=s_vehicle_stock.log_gdp_per_capita,
+            population=s_vehicle_stock.population,
         )
 
-        for _, s_vehicle_stock in df_vehicle_stock.iterrows():
-            output = module(
+        df_predictions.append(
+            pd.DataFrame({"vehicle_stock": map(float, vehicle_stock_values)}).assign(
                 log_gdp_per_capita=s_vehicle_stock.log_gdp_per_capita,
                 population=s_vehicle_stock.population,
             )
+        )
 
-            curve_objs.append(
-                {
-                    "log_gdp_per_capita": s_vehicle_stock.log_gdp_per_capita,
-                    "population": s_vehicle_stock.population,
-                    "vehicle_stock": float(output["vehicle_stock"]),
-                }
-            )
+    # plotting
 
     plot_objs: list[dict[str, Any]]
-
     for plot_against in ["log_gdp_per_capita", "population"]:
         name: str | None = None
         xlabel: str | None = None
@@ -433,16 +504,16 @@ def tsai_2023_sec_2_4_experiment(
 
         plot_objs = (
             df_vehicle_stock.reset_index()
-            .assign(percentage=-1, zorder=1)
+            .assign(percentage=-1, group=PlotGroup.EXISTING)
             .to_dict(orient="records")
         )
         plot_objs.extend(
-            pd.DataFrame(curve_objs)
+            pd.concat(df_predictions, ignore_index=True)
             .groupby(plot_against)
             .quantile(plot_stock_quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
-            .assign(zorder=0)
+            .assign(group=PlotGroup.PREDICTION)
             .to_dict(orient="records")
         )
 
@@ -452,17 +523,29 @@ def tsai_2023_sec_2_4_experiment(
                 df_plot,
                 x=plot_against,
                 y="vehicle_stock",
-                color="zorder",
-                marker="zorder",
-                linewidth="zorder",
-                linestyle="zorder",
+                color="group",
+                marker="group",
+                linewidth="group",
+                linestyle="group",
             )
             .add(so.Line(), group="percentage")
             .scale(
-                color={0: "gray", 1: "b"},
-                marker={0: None, 1: "o"},
-                linewidth={0: 2, 1: 0},
-                linestyle={0: (6, 2), 1: "-"},
+                color={
+                    PlotGroup.EXISTING: "b",
+                    PlotGroup.PREDICTION: "gray",
+                },
+                marker={
+                    PlotGroup.EXISTING: "o",
+                    PlotGroup.PREDICTION: None,
+                },
+                linewidth={
+                    PlotGroup.EXISTING: 0,
+                    PlotGroup.PREDICTION: 2,
+                },
+                linestyle={
+                    PlotGroup.EXISTING: "-",
+                    PlotGroup.PREDICTION: (6, 2),
+                },
             )
             .label(x=xlabel, y=f"{vehicle_title} Stock")
             .layout(size=(6, 4))
@@ -471,8 +554,8 @@ def tsai_2023_sec_2_4_experiment(
 
 
 def tsai_2023_sec_2_5_experiment(
-    bootstrap_runs: int = 100,
-    plot_population_density_values: Iterable[float] = np.linspace(0, 10_000, 100),
+    bootstrap_runs: int = 10,
+    plot_population_density_values: Iterable[float] = np.linspace(0, 10_000, 25),
     plot_years: Iterable[int] = np.arange(1998, 2023),
     plot_stock_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
 ):
@@ -481,6 +564,8 @@ def tsai_2023_sec_2_5_experiment(
     vehicle_type: VehicleType = VehicleType.BUS
     vehicle_title: str = vehicle_type.replace("_", " ").title()
 
+    # data
+
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_5_data(
         data_dir=FLAGS.data_dir, vehicle_type=vehicle_type
     )
@@ -488,43 +573,50 @@ def tsai_2023_sec_2_5_experiment(
 
     plot_objs: list[dict[str, Any]] = (
         df_vehicle_stock.reset_index()
-        .assign(percentage=-1, zorder=1)
+        .assign(percentage=-1, group=PlotGroup.EXISTING)
         .to_dict(orient="records")
     )
 
+    # module
+
     module = BusStockModule()
+    bootstrap_module = BootstrapModule(module=module, runs=bootstrap_runs)
+    bootstrap_module.fit(
+        population_density=df_vehicle_stock.population_density.values,
+        year=df_vehicle_stock.year.values - min_year,
+        vehicle_stock_density=df_vehicle_stock.vehicle_stock_density.values,
+    )
 
-    curve_objs: list[dict[str, Any]] = []
-    for run in range(bootstrap_runs):
-        logging.info(f"Running bootstrap vehicle_type={vehicle_type}, run={run}.")
+    # predictions
 
-        module.fit(
-            population_density=df_vehicle_stock.population_density.values,
-            year=df_vehicle_stock.year.values - min_year,
-            vehicle_stock_density=df_vehicle_stock.vehicle_stock_density.values,
-            bootstrap=True,
+    df_predictions: list[pd.DataFrame] = []
+    for population_density, year in rp.track(
+        itertools.product(plot_population_density_values, plot_years),
+    ):
+        vehicle_stock_density_values = bootstrap_module(
+            output=module.vehicle_stock_density,
+            population_density=population_density,
+            year=year - min_year,
         )
 
-        for population_density, year in itertools.product(
-            plot_population_density_values, plot_years
-        ):
-            output = module(population_density=population_density, year=year - min_year)
-
-            curve_objs.append(
-                {
-                    "population_density": population_density,
-                    "year": year,
-                    "vehicle_stock_density": float(output["vehicle_stock_density"]),
-                }
+        df_predictions.append(
+            pd.DataFrame(
+                {"vehicle_stock_density": map(float, vehicle_stock_density_values)}
+            ).assign(
+                population_density=population_density,
+                year=year,
             )
+        )
+
+    # plotting
 
     plot_objs.extend(
-        pd.DataFrame(curve_objs)
+        pd.concat(df_predictions, ignore_index=True)
         .groupby("population_density")
         .quantile(plot_stock_quantiles)
         .rename_axis(index={None: "percentage"})
         .reset_index()
-        .assign(zorder=0)
+        .assign(group=PlotGroup.PREDICTION)
         .to_dict(orient="records")
     )
 
@@ -534,17 +626,29 @@ def tsai_2023_sec_2_5_experiment(
             df_plot,
             x="population_density",
             y="vehicle_stock_density",
-            color="zorder",
-            marker="zorder",
-            linewidth="zorder",
-            linestyle="zorder",
+            color="group",
+            marker="group",
+            linewidth="group",
+            linestyle="group",
         )
         .add(so.Line(), group="percentage")
         .scale(
-            color={0: "gray", 1: "b"},
-            marker={0: None, 1: "o"},
-            linewidth={0: 2, 1: 0},
-            linestyle={0: (6, 2), 1: "-"},
+            color={
+                PlotGroup.EXISTING: "b",
+                PlotGroup.PREDICTION: "gray",
+            },
+            marker={
+                PlotGroup.EXISTING: "o",
+                PlotGroup.PREDICTION: None,
+            },
+            linewidth={
+                PlotGroup.EXISTING: 0,
+                PlotGroup.PREDICTION: 2,
+            },
+            linestyle={
+                PlotGroup.EXISTING: "-",
+                PlotGroup.PREDICTION: (6, 2),
+            },
         )
         .label(x="Population Density", y=f"{vehicle_title} Stock Density")
         .layout(size=(6, 4))
@@ -560,13 +664,6 @@ def tsai_2023_sec_3_1_experiment(
     predict_years: Iterable[int] = np.arange(2020, 2051),
     plot_years: Iterable[int] = np.arange(2000, 2050),
 ):
-    class PlotGroup(int, enum.Enum):
-        EXISTING = 0
-        PREDICTION_OF_EXISTING = 1
-        PREDICTION_OF_FUTURE_MEDIAN = 2
-        PREDICTION_OF_FUTURE_CI_LOW = 3
-        PREDICTION_OF_FUTURE_CI_HIGH = 4
-
     logging.set_verbosity(logging.INFO)
 
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
@@ -574,6 +671,8 @@ def tsai_2023_sec_3_1_experiment(
     vehicle_type: VehicleType = VehicleType.CAR
     vehicle_str: str = vehicle_type.value.lower()
     vehicle_title: str = vehicle_type.replace("_", " ").title()
+
+    # data
 
     s_population: pd.Series = get_population_series(FLAGS.data_dir)
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
@@ -589,6 +688,8 @@ def tsai_2023_sec_3_1_experiment(
     df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
         FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
     )
+
+    # module
 
     income_module = LinearModule()
     income_distribution_module = IncomeDistributionModule()
@@ -613,8 +714,7 @@ def tsai_2023_sec_3_1_experiment(
             runs = 1
 
         stock_vals: list[int] = []
-        # for _ in rp.track(range(runs), description=f"Year {year}"):
-        for _ in range(runs):
+        for _ in rp.track(range(runs), description=f"Year {year}"):
             # module fitting
 
             income_module.fit(
@@ -665,7 +765,6 @@ def tsai_2023_sec_3_1_experiment(
                 pd.Series(stock_vals, name="vehicle_stock")
                 .quantile([0.5])
                 .rename_axis(index={None: "percentage"})
-                .astype(int)
                 .reset_index()
                 .assign(
                     year=year,
@@ -678,23 +777,22 @@ def tsai_2023_sec_3_1_experiment(
                 pd.Series(stock_vals, name="vehicle_stock")
                 .quantile([0.025, 0.5, 0.975])
                 .rename_axis(index={None: "percentage"})
-                .astype(int)
                 .reset_index()
             )
 
             df_stocks.append(
                 df_stock.loc[df_stock["percentage"] == 0.025].assign(
-                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_CI_LOW
+                    year=year, group=PlotGroup.PREDICTION_CI_LOW
                 )
             )
             df_stocks.append(
                 df_stock.loc[df_stock["percentage"] == 0.5].assign(
-                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_MEDIAN
+                    year=year, group=PlotGroup.PREDICTION
                 )
             )
             df_stocks.append(
                 df_stock.loc[df_stock["percentage"] == 0.975].assign(
-                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH
+                    year=year, group=PlotGroup.PREDICTION_CI_HIGH
                 )
             )
 
@@ -743,31 +841,31 @@ def tsai_2023_sec_3_1_experiment(
         .scale(
             color={
                 PlotGroup.EXISTING: "gray",
+                PlotGroup.PREDICTION: "b",
                 PlotGroup.PREDICTION_OF_EXISTING: "gray",
-                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: "b",
-                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: "r",
-                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: "r",
+                PlotGroup.PREDICTION_CI_LOW: "r",
+                PlotGroup.PREDICTION_CI_HIGH: "r",
             },
             marker={
                 PlotGroup.EXISTING: "o",
+                PlotGroup.PREDICTION: None,
                 PlotGroup.PREDICTION_OF_EXISTING: None,
-                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: None,
-                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: None,
-                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: None,
+                PlotGroup.PREDICTION_CI_LOW: None,
+                PlotGroup.PREDICTION_CI_HIGH: None,
             },
             linewidth={
                 PlotGroup.EXISTING: 0,
+                PlotGroup.PREDICTION: 2,
                 PlotGroup.PREDICTION_OF_EXISTING: 2,
-                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: 2,
-                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: 2,
-                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: 2,
+                PlotGroup.PREDICTION_CI_LOW: 2,
+                PlotGroup.PREDICTION_CI_HIGH: 2,
             },
             linestyle={
                 PlotGroup.EXISTING: "-",  # unused
+                PlotGroup.PREDICTION: "-",
                 PlotGroup.PREDICTION_OF_EXISTING: (6, 2),
-                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: "-",
-                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: (6, 2),
-                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: (6, 2),
+                PlotGroup.PREDICTION_CI_LOW: (6, 2),
+                PlotGroup.PREDICTION_CI_HIGH: (6, 2),
             },
         )
         .label(x="Year", y=f"{vehicle_title} Stock")
@@ -782,13 +880,13 @@ def main(_):
 
     logging.set_verbosity(logging.DEBUG)
 
-    # vehicle_subsidy()
-    # tsai_2023_sec_2_2_1_experiment()
-    # tsai_2023_sec_2_2_2_experiment()
-    # tsai_2023_sec_2_2_3_experiment()
-    # tsai_2023_sec_2_3_experiment()
-    # tsai_2023_sec_2_4_experiment()
-    # tsai_2023_sec_2_5_experiment()
+    vehicle_subsidy()
+    tsai_2023_sec_2_2_1_experiment()
+    tsai_2023_sec_2_2_2_experiment()
+    tsai_2023_sec_2_2_3_experiment()
+    tsai_2023_sec_2_3_experiment()
+    tsai_2023_sec_2_4_experiment()
+    tsai_2023_sec_2_5_experiment()
     tsai_2023_sec_3_1_experiment()
 
 

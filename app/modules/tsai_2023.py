@@ -215,6 +215,7 @@ class TruckStockModule(LinearModule):
 
         self.log_gdp_per_capita = self.x[0]
         self.population = self.x[1]
+        self.vehicle_stock = self.y
 
     def output(self) -> dict[str, sp.Basic]:
         return {"vehicle_stock": self.y} | super().output()
@@ -248,13 +249,9 @@ class BusStockModule(Module):
         population_density: sp.Float = cast(sp.Float, inputs.pop("population_density"))
         population_density_in_thousands: sp.Float = population_density / 1_000
 
-        _output: dict[str, sp.Basic] = super().__call__(
+        return super().__call__(
             output, population_density=population_density_in_thousands, **inputs
         )
-        vehicle_stock_density: sp.Float = cast(
-            sp.Float, _output.pop("vehicle_stock_density")
-        )
-        return {"vehicle_stock_density": vehicle_stock_density / 1_000} | _output
 
     def output(self) -> dict[str, sp.Basic]:
         return {
@@ -268,41 +265,40 @@ class BusStockModule(Module):
         vehicle_stock_density: np.ndarray,
     ) -> dict[sp.Basic, float]:
         population_density_in_thousands: np.ndarray = population_density / 1_000
-        vehicle_stock_density_in_milli: np.ndarray = vehicle_stock_density * 1_000
 
         fn: Callable[[tuple, float, float, float, float], np.ndarray] = sp.lambdify(
             [
                 (self.population_density, self.year),
-                self.sigmoid_curve.offset,
-                self.sigmoid_curve.beta,
                 self.sigmoid_curve.gamma,
+                self.sigmoid_curve.alpha,
+                self.sigmoid_curve.beta,
                 self.linear.a[0],
             ],
             self.vehicle_stock_density,
         )
-        (offset, beta, gamma, a_0), _ = scipy.optimize.curve_fit(
+        (gamma, alpha, beta, a_0), _ = scipy.optimize.curve_fit(
             fn,
             (population_density_in_thousands, year),
-            vehicle_stock_density_in_milli,
-            p0=[2.4, 0.68, 2.43, 0.017],
+            vehicle_stock_density,
+            p0=[2.5 / 1_000, 1.5, -0.5, 0.02 / 1_000],
         )
 
-        y: np.ndarray = vehicle_stock_density_in_milli
+        y: np.ndarray = vehicle_stock_density
         y_pred = np.asarray(
             [
-                fn((p, y), offset, beta, gamma, a_0)
+                fn((p, y), gamma, alpha, beta, a_0)
                 for p, y in zip(population_density_in_thousands, year)
             ]
         )
         r2: float = sklearn.metrics.r2_score(y, y_pred)
 
         logging.debug(
-            f"Fitted with r2={r2} and parameters: offset={offset}, beta={beta}, gamma={gamma}, a_0={a_0}"
+            f"Fitted with r2={r2} and parameters: gamma={gamma}, alpha={alpha}, beta={beta}, a_0={a_0}"
         )
 
         return {
-            self.sigmoid_curve.offset: offset,
-            self.sigmoid_curve.beta: beta,
             self.sigmoid_curve.gamma: gamma,
+            self.sigmoid_curve.alpha: alpha,
+            self.sigmoid_curve.beta: beta,
             self.linear.a[0]: a_0,
         }

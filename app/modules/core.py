@@ -72,7 +72,7 @@ class SigmoidCurveModule(Module):
         alpha = sp.Symbol("alpha")
         beta = sp.Symbol("beta")
 
-        y = gamma * (1 - alpha * (1 - 1 / (1 + sp.exp(beta * x))))
+        y = gamma * (1 - alpha * (1 - 1 / (1 + sp.exp(-beta * x))))
 
         self.x = x
         self.gamma = gamma

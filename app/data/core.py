@@ -73,7 +73,7 @@ def extrapolate_series(
 
     elif isinstance(fn, str):
         s_extrapolated = (
-            pd.Series(index=index, dtype=s.dtype)
+            pd.Series(index=index, dtype=s.dtype, name=s.name)
             .combine_first(s)
             .interpolate(method=fn)
         )
