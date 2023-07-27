@@ -61,20 +61,27 @@ def extrapolate_series(
     use_original: bool = True,
 ) -> pd.Series:
     s_extrapolated: pd.Series
+
     if callable(fn):
         popt, _ = scipy.optimize.curve_fit(fn, s.index.values, s.values)
         values: np.ndarray = np.vectorize(fn)(index.values, *popt)
 
         s_extrapolated = pd.Series(values, index=index)
+
+        if use_original:
+            s_extrapolated = s.combine_first(s_extrapolated)
+
     elif isinstance(fn, str):
-        s_extrapolated = s.reindex(index).interpolate(method=fn)
+        s_extrapolated = (
+            pd.Series(index=index, dtype=s.dtype)
+            .combine_first(s)
+            .interpolate(method=fn)
+        )
+
     else:
         raise NotImplementedError
 
-    if use_original:
-        return s.combine_first(s_extrapolated)
-    else:
-        return s_extrapolated
+    return s_extrapolated
 
 
 def get_column_data_fn(
@@ -120,6 +127,7 @@ def get_column_data_fn(
                 fn=extrapolate_method,
                 use_original=extrapolate_use_original,
             )
+
         return s
 
     return get_column_data
@@ -282,9 +290,10 @@ def get_income_dataframe(
         data_dir=data_dir, extrapolate_index=index
     )
 
-    df: pd.DataFrame = (
-        pd.concat([s_income, s_gini, s_deflation], axis=1).loc[index].sort_index()
-    )
+    df: pd.DataFrame = pd.concat([s_income, s_gini, s_deflation], axis=1).dropna()
+    if index is not None:
+        df = df.loc[index]
+
     df["adjusted_income"] = df.income / (df.deflation / 100)
 
     return df

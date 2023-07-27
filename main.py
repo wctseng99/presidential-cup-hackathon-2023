@@ -1,21 +1,24 @@
+import enum
 import itertools
 import logging as py_logging
 import pprint
-from collections.abc import Iterable
+import warnings
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 import graphviz as gv
 import numpy as np
 import pandas as pd
+import scipy.integrate
 import seaborn.objects as so
 import sympy as sp
 import sympy.stats as sps
-import sympy.stats.rv as sps_rv
 from absl import app, flags, logging
 
 from app.data import (
     VehicleType,
+    get_gini_series,
     get_income_dataframe,
     get_population_series,
     get_tsai_sec_2_2_3_data,
@@ -30,6 +33,7 @@ from app.modules import (
     BusStockModule,
     CarOwnershipModuleV2,
     IncomeDistributionModule,
+    LinearModule,
     OperatingCarStockModule,
     ScooterOwnershipModule,
     TruckStockModule,
@@ -225,9 +229,12 @@ def tsai_2023_sec_2_2_3_experiment(
         df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
             FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
         )
-        df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
-            income_bins_removed:-income_bins_removed
-        ]
+        if income_bins_removed:
+            df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
+                income_bins_removed:-income_bins_removed
+            ]
+        else:
+            df_vehicle_ownership_to_fit = df_vehicle_ownership
 
         plot_objs: list[dict[str, Any]] = (
             df_vehicle_ownership.reset_index()
@@ -548,64 +555,230 @@ def tsai_2023_sec_2_5_experiment(
 def tsai_2023_sec_3_1_experiment(
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
-    existing_stock_years: Iterable[int] = range(1990, 2021),
-    rv_expectation_samples: int = 1000,
+    bootstrap_runs: int = 300,
+    integrate_sigma: float = 64,
+    predict_years: Iterable[int] = np.arange(2020, 2051),
+    plot_years: Iterable[int] = np.arange(2000, 2050),
 ):
+    class PlotGroup(int, enum.Enum):
+        EXISTING = 0
+        PREDICTION_OF_EXISTING = 1
+        PREDICTION_OF_FUTURE_MEDIAN = 2
+        PREDICTION_OF_FUTURE_CI_LOW = 3
+        PREDICTION_OF_FUTURE_CI_HIGH = 4
+
+    logging.set_verbosity(logging.INFO)
+
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
+
+    vehicle_type: VehicleType = VehicleType.CAR
+    vehicle_str: str = vehicle_type.value.lower()
+    vehicle_title: str = vehicle_type.replace("_", " ").title()
 
     s_population: pd.Series = get_population_series(FLAGS.data_dir)
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        FLAGS.data_dir, vehicle_type=VehicleType.CAR
-    )
-    df_income_distribution: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
-    df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-        FLAGS.data_dir, vehicle_type=VehicleType.CAR, income_bins=income_bins_total
+        FLAGS.data_dir, vehicle_type=vehicle_type
     )
 
+    # make sure gini is extrapolated to the desired years
+    s_gini: pd.Series = get_gini_series(
+        FLAGS.data_dir, extrapolate_index=pd.Index(predict_years)
+    )
+
+    df_income: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir, index=None)
+    df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
+        FLAGS.data_dir, vehicle_type=vehicle_type, income_bins=income_bins_total
+    )
+
+    income_module = LinearModule()
     income_distribution_module = IncomeDistributionModule()
     car_ownership_module = CarOwnershipModuleV2()
 
-    df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.iloc[
-        income_bins_removed:-income_bins_removed
-    ]
-    car_ownership_module.fit(
-        income=df_vehicle_ownership_to_fit.adjusted_income.values,
-        ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
-        bootstrap=False,
-    )
+    existing_years: Iterable[int] = set(s_vehicle_stock.index) & set(df_income.index)
+    years: Iterable[int] = sorted(set().union(existing_years).union(predict_years))
 
-    years: Iterable[int] = df_income_distribution.index.values
+    df_stocks: list[pd.DataFrame] = []
     for year in years:
-        logging.info(f"Running year={year}.")
-        s_income_distribution: pd.Series = df_income_distribution.loc[year]
+        bootstrap: bool
+        runs: int
 
-        stock_val: int
-        output: dict[str, sp.Basic]
-        if year in existing_stock_years:
-            stock_val = int(s_vehicle_stock[year])
+        # `existing_years` and `predict_years` can overlap, and so long as `year` is in
+        # `predict_years`, we want to perform bootstrapping
+        if year in predict_years:
+            bootstrap = True
+            runs = bootstrap_runs
 
         else:
-            output = income_distribution_module(
-                income=s_income_distribution.adjusted_income,
-                gini=s_income_distribution.gini,
+            bootstrap = False
+            runs = 1
+
+        stock_vals: list[int] = []
+        # for _ in rp.track(range(runs), description=f"Year {year}"):
+        for _ in range(runs):
+            # module fitting
+
+            income_module.fit(
+                X=np.r_["1,2,0", df_income.index.values],
+                y=df_income.adjusted_income.values,
+                bootstrap=bootstrap,
             )
 
-            income_rv: sps_rv.RandomSymbol = output["income_rv"]
-
-            output = car_ownership_module(income=income_rv)
-            ownership_rv: sp.Basic = output["ownership"]
-
-            ownership_val = sps_rv.sampling_E(
-                ownership_rv, numsamples=rv_expectation_samples
+            df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.head(
+                -income_bins_removed
+            ).tail(-income_bins_removed)
+            car_ownership_module.fit(
+                income=df_vehicle_ownership_to_fit.adjusted_income.values,
+                ownership=df_vehicle_ownership_to_fit.adjusted_vehicle_ownership.values,
+                bootstrap=bootstrap,
             )
-            stock_val = int(ownership_val * s_population[year])
 
-        logging.info(f"Total stock of cars in {year}: {stock_val}")
-        logging.info(s_income_distribution.to_dict())
+            # module prediction
+
+            mean_income: sp.Expr
+            if year in existing_years:
+                mean_income = df_income.loc[year].adjusted_income
+            else:
+                mean_income = income_module(output=income_module.y, x_0=year)
+
+            income_pdf = income_distribution_module(
+                output=income_distribution_module.income_pdf,
+                mean_income=mean_income,
+                gini=s_gini.loc[year],
+            )
+            ownership_var = car_ownership_module(
+                output=car_ownership_module.ownership,
+                income=income_distribution_module.income_var,
+            )
+
+            fn: Callable = sp.lambdify(
+                income_distribution_module.income_var,
+                ownership_var * income_pdf,
+            )
+            ownership_val, _ = scipy.integrate.quad(
+                fn, 0, integrate_sigma * mean_income
+            )
+
+            stock_vals.append(int(ownership_val * s_population[year]))
+
+        if year in existing_years:
+            df_stocks.append(
+                pd.Series(stock_vals, name="vehicle_stock")
+                .quantile([0.5])
+                .rename_axis(index={None: "percentage"})
+                .astype(int)
+                .reset_index()
+                .assign(
+                    year=year,
+                    group=PlotGroup.PREDICTION_OF_EXISTING,
+                )
+            )
+
+        else:
+            df_stock: pd.DataFrame = (
+                pd.Series(stock_vals, name="vehicle_stock")
+                .quantile([0.025, 0.5, 0.975])
+                .rename_axis(index={None: "percentage"})
+                .astype(int)
+                .reset_index()
+            )
+
+            df_stocks.append(
+                df_stock.loc[df_stock["percentage"] == 0.025].assign(
+                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_CI_LOW
+                )
+            )
+            df_stocks.append(
+                df_stock.loc[df_stock["percentage"] == 0.5].assign(
+                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_MEDIAN
+                )
+            )
+            df_stocks.append(
+                df_stock.loc[df_stock["percentage"] == 0.975].assign(
+                    year=year, group=PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH
+                )
+            )
+
+    df_stock = pd.concat(df_stocks, ignore_index=True)
+
+    # offset the predicted vehicle stock to match the existing vehicle stock
+
+    s_vehicle_stock_predicted: pd.Series = df_stock.loc[
+        (
+            df_stock["year"].isin(existing_years)
+            & (df_stock["group"] == PlotGroup.PREDICTION_OF_EXISTING)
+        )
+    ].set_index("year")["vehicle_stock"]
+    offset: int = pd.Series.mean(
+        (
+            s_vehicle_stock.loc[s_vehicle_stock_predicted.index].values
+            - s_vehicle_stock_predicted
+        )
+    ).astype(int)
+
+    df_stock["vehicle_stock"] += offset
+
+    # plot
+
+    plot_objs: list[dict[str, Any]] = []
+    plot_objs.extend(
+        s_vehicle_stock.reset_index()
+        .assign(group=PlotGroup.EXISTING)
+        .to_dict(orient="records")
+    )
+    plot_objs.extend(df_stock.to_dict(orient="records"))
+
+    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
+    df_plot = df_plot.loc[df_plot["year"].isin(plot_years)]
+    (
+        so.Plot(
+            df_plot,
+            x="year",
+            y="vehicle_stock",
+            color="group",
+            marker="group",
+            linewidth="group",
+            linestyle="group",
+        )
+        .add(so.Line(), group="group")
+        .scale(
+            color={
+                PlotGroup.EXISTING: "gray",
+                PlotGroup.PREDICTION_OF_EXISTING: "gray",
+                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: "b",
+                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: "r",
+                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: "r",
+            },
+            marker={
+                PlotGroup.EXISTING: "o",
+                PlotGroup.PREDICTION_OF_EXISTING: None,
+                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: None,
+                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: None,
+                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: None,
+            },
+            linewidth={
+                PlotGroup.EXISTING: 0,
+                PlotGroup.PREDICTION_OF_EXISTING: 2,
+                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: 2,
+                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: 2,
+                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: 2,
+            },
+            linestyle={
+                PlotGroup.EXISTING: "-",  # unused
+                PlotGroup.PREDICTION_OF_EXISTING: (6, 2),
+                PlotGroup.PREDICTION_OF_FUTURE_MEDIAN: "-",
+                PlotGroup.PREDICTION_OF_FUTURE_CI_LOW: (6, 2),
+                PlotGroup.PREDICTION_OF_FUTURE_CI_HIGH: (6, 2),
+            },
+        )
+        .label(x="Year", y=f"{vehicle_title} Stock")
+        .layout(size=(6, 4))
+        .save(Path(FLAGS.result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.pdf"))
+    )
 
 
 def main(_):
     py_logging.getLogger("matplotlib.category").setLevel(py_logging.WARNING)
+    warnings.filterwarnings("ignore", category=scipy.integrate.IntegrationWarning)
 
     logging.set_verbosity(logging.DEBUG)
 

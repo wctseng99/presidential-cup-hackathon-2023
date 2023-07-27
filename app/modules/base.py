@@ -1,9 +1,11 @@
 import abc
 import itertools
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
 import sympy as sp
+from absl import logging
 
 
 class BaseModule(abc.ABC):
@@ -89,3 +91,57 @@ class Module(BaseModule):
         }
 
         return self.subs(output, input_by_symbol | self.param_by_symbol)
+
+
+class BootstrapModule(Module):
+    def __init__(self, module: Module, runs: int = 100):
+        self.module = module
+        self.runs = runs
+
+        self.param_by_symbol_list: list[dict[sp.Basic, float]] | None = None
+
+    def output(self) -> Any:
+        return self.module.output()
+
+    def __call__(
+        self,
+        output: Any = None,
+        quantile: float | Iterable[float] | None = None,
+        **inputs: sp.Basic,
+    ) -> Any:
+        if self.param_by_symbol_list is None:
+            raise RuntimeError("Module has not been fitted")
+
+        if output is None:
+            output = self.output()
+
+        _outputs: list[Any] = []
+        for param_by_symbol in self.param_by_symbol_list:
+            self.module.param_by_symbol = param_by_symbol
+
+            _output = self.module.__call__(output, **inputs)
+            _outputs.append(_output)
+
+        if quantile is None:
+            return _outputs
+
+        if isinstance(quantile, float):
+            quantile = [quantile]
+
+        raise NotImplementedError  # TODO
+
+    def _fit(self, *args: Any, **kwargs: Any) -> list[dict[sp.Basic, float]]:  # type: ignore
+        param_by_symbol_list = []
+        for run in range(self.runs):
+            logging.info(f"Bootstrap iteration {run + 1}")
+
+            module: Module = self.module
+            module.fit(*args, **kwargs)
+            assert module.param_by_symbol is not None
+
+            param_by_symbol_list.append(module.param_by_symbol)
+
+        return param_by_symbol_list
+
+    def fit(self, *args: Any, **kwargs: Any) -> None:
+        self.param_by_symbol_list = self._fit(*args, **kwargs)

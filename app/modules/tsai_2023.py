@@ -59,11 +59,11 @@ class VehicleSurvivalRateModule(Module):
 # Section 2.2.2: Disposable Income Distribution
 class IncomeDistributionModule(BaseModule):
     def __init__(self):
-        income = sp.Symbol("income")
+        mean_income = sp.Symbol("mean_income")
         gini = sp.Symbol("gini")
 
         beta = 1 / gini
-        alpha = income * sp.sin(sp.pi / beta) / (sp.pi / beta)
+        alpha = mean_income * sp.sin(sp.pi / beta) / (sp.pi / beta)
 
         income_var = sp.Symbol("income_var")
         income_pdf = (
@@ -73,11 +73,12 @@ class IncomeDistributionModule(BaseModule):
         )
         income_rv = sps.ContinuousRV(income_var, income_pdf, set=sp.Interval(0, sp.oo))
 
-        self.income = income
+        self.mean_income = mean_income
         self.gini = gini
 
         self.beta = beta
         self.alpha = alpha
+        self.income_var = income_var
         self.income_pdf = income_pdf
         self.income_rv = income_rv
 
@@ -91,7 +92,7 @@ class IncomeDistributionModule(BaseModule):
 
 
 # Section 2.2.3: Ownership Probability Function
-class CarOwnershipMixin(Module):
+class CarOwnershipModule(GompertzCurveModule):
     def __init__(self):
         super().__init__()
 
@@ -107,8 +108,6 @@ class CarOwnershipMixin(Module):
 
         return super().__call__(output, income=income_in_millions, **inputs)
 
-
-class CarOwnershipModule(CarOwnershipMixin, GompertzCurveModule):
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 
@@ -121,7 +120,22 @@ class CarOwnershipModule(CarOwnershipMixin, GompertzCurveModule):
         return params
 
 
-class CarOwnershipModuleV2(CarOwnershipMixin, SigmoidCurveModule):
+class CarOwnershipModuleV2(SigmoidCurveModule):
+    def __init__(self):
+        super().__init__()
+
+        self.income = self.x
+        self.ownership = self.y
+
+    def output(self) -> dict[str, sp.Basic]:
+        return {"ownership": self.ownership, **super().output()}
+
+    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+        income: sp.Float = cast(sp.Float, inputs.pop("income"))
+        income_in_millions: sp.Float = income / 1_000_000
+
+        return super().__call__(output, income=income_in_millions, **inputs)
+
     def _fit(self, income: np.ndarray, ownership: np.ndarray) -> dict[sp.Basic, float]:  # type: ignore
         income_in_millions: np.ndarray = income / 1_000_000
 

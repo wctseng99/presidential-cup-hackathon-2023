@@ -1,4 +1,4 @@
-from app.modules.base import BaseModule, Module
+from app.modules.base import BaseModule, BootstrapModule, Module
 from app.modules.core import (
     GammaCurveModule,
     GompertzCurveModule,
