@@ -55,7 +55,10 @@ class PlotGroup(int, enum.Enum):
     PREDICTION_CI_HIGH = 4
 
 
-def vehicle_subsidy():
+def vehicle_subsidy(
+    data_dir: Path,
+    result_dir: Path,
+):
     logging.info("Running vehicle subsidy experiment.")
 
     module = VehicleSubsidyModule()
@@ -95,10 +98,12 @@ def vehicle_subsidy():
         module.E_G,
         atom=lambda x: not isinstance(x, sp.Basic),
     )
-    gv.Source(dot_str).render("total_budget.gv", format="png")
+    gv.Source(dot_str).render(Path(result_dir, "total_budget.gv"), format="png")
 
 
 def tsai_2023_sec_2_2_1_experiment(
+    data_dir: Path,
+    result_dir: Path,
     plot_age_values: Iterable[float] = np.linspace(0, 30, 100),
 ):
     logging.info("Running Tsai 2023 Section 2.2.1 experiment.")
@@ -108,10 +113,10 @@ def tsai_2023_sec_2_2_1_experiment(
     for vehicle in rp.track([Vehicle.CAR, Vehicle.SCOOTER, Vehicle.OPERATING_CAR]):
         # data
 
-        s: pd.Series = get_vehicle_survival_rate_series(FLAGS.data_dir, vehicle=vehicle)
+        s: pd.Series = get_vehicle_survival_rate_series(data_dir, vehicle=vehicle)
         plot_objs.extend(
             s.reset_index()
-            .assign(vehicle=vehicle, group=PlotGroup.EXISTING)
+            .assign(vehicle=vehicle.value, group=PlotGroup.EXISTING)
             .to_dict(orient="records")
         )
 
@@ -131,7 +136,7 @@ def tsai_2023_sec_2_2_1_experiment(
                     "survival_rate": survival_rate_values,
                 }
             )
-            .assign(vehicle=vehicle, group=PlotGroup.PREDICTION)
+            .assign(vehicle=vehicle.value, group=PlotGroup.PREDICTION)
             .to_dict(orient="records")
         )
 
@@ -151,9 +156,9 @@ def tsai_2023_sec_2_2_1_experiment(
         .add(so.Line())
         .scale(
             color={
-                "car": "b",
-                "scooter": "r",
-                "operating_car": "g",
+                Vehicle.CAR.value: "b",
+                Vehicle.SCOOTER.value: "r",
+                Vehicle.OPERATING_CAR.value: "g",
             },
             marker={
                 PlotGroup.PREDICTION: None,
@@ -170,11 +175,13 @@ def tsai_2023_sec_2_2_1_experiment(
         )
         .label(x="Age (year)", y="Survival Rate")
         .layout(size=(6, 4))
-        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-2-1.pdf"))
+        .save(Path(result_dir, "tsai-2023-sec-2-2-1.pdf"))
     )
 
 
 def tsai_2023_sec_2_2_2_experiment(
+    data_dir: Path,
+    result_dir: Path,
     plot_years: Iterable[int] = range(2000, 2060, 10),
     plot_year_colors: Iterable[str] = [
         "b",
@@ -190,7 +197,7 @@ def tsai_2023_sec_2_2_2_experiment(
 
     # data
 
-    df_income: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir)
+    df_income: pd.DataFrame = get_income_dataframe(data_dir=data_dir)
 
     # module
 
@@ -236,11 +243,13 @@ def tsai_2023_sec_2_2_2_experiment(
         .scale(color=dict(zip(plot_years, plot_year_colors)))
         .label(x="Disposable Income", y="Probability Density")
         .layout(size=(6, 4))
-        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-2-2.pdf"))
+        .save(Path(result_dir, "tsai-2023-sec-2-2-2.pdf"))
     )
 
 
 def tsai_2023_sec_2_2_3_experiment(
+    data_dir: Path,
+    result_dir: Path,
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
     bootstrap_runs: int = 100,
@@ -257,7 +266,7 @@ def tsai_2023_sec_2_2_3_experiment(
         # data
 
         df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-            FLAGS.data_dir, vehicle=vehicle, income_bins=income_bins_total
+            data_dir, vehicle=vehicle, income_bins=income_bins_total
         )
         df_vehicle_ownership_to_fit: pd.DataFrame = df_vehicle_ownership.head(
             -income_bins_removed
@@ -345,11 +354,13 @@ def tsai_2023_sec_2_2_3_experiment(
             )
             .label(x="Disposable Income", y=f"{vehicle_title} Ownership")
             .layout(size=(6, 4))
-            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-2-3-{vehicle_str}.pdf"))
+            .save(Path(result_dir, f"tsai-2023-sec-2-2-3-{vehicle_str}.pdf"))
         )
 
 
 def tsai_2023_sec_2_3_experiment(
+    data_dir: Path,
+    result_dir: Path,
     bootstrap_runs: int = 100,
     plot_gdp_per_capita_values: Iterable[float] = np.linspace(600_000, 1_500_000, 100),
     plot_stock_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
@@ -361,9 +372,7 @@ def tsai_2023_sec_2_3_experiment(
 
     # data
 
-    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_3_data(
-        FLAGS.data_dir, vehicle=vehicle
-    )
+    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_3_data(data_dir, vehicle=vehicle)
     plot_objs: list[dict[str, Any]] = (
         df_vehicle_stock.reset_index()
         .assign(percentage=-1, group=PlotGroup.EXISTING)
@@ -433,11 +442,13 @@ def tsai_2023_sec_2_3_experiment(
         )
         .label(x="GDP per Capita", y=f"{vehicle_title} Stock")
         .layout(size=(6, 4))
-        .save(Path(FLAGS.result_dir, "tsai-2023-sec-2-3.pdf"))
+        .save(Path(result_dir, "tsai-2023-sec-2-3.pdf"))
     )
 
 
 def tsai_2023_sec_2_4_experiment(
+    data_dir: Path,
+    result_dir: Path,
     bootstrap_runs: int = 100,
     plot_stock_quantiles: Iterable[float] = np.arange(0, 1.001, 0.1),
 ):
@@ -448,9 +459,7 @@ def tsai_2023_sec_2_4_experiment(
 
     # data
 
-    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_4_data(
-        FLAGS.data_dir, vehicle=vehicle
-    )
+    df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_4_data(data_dir, vehicle=vehicle)
 
     # module
 
@@ -543,11 +552,13 @@ def tsai_2023_sec_2_4_experiment(
             )
             .label(x=xlabel, y=f"{vehicle_title} Stock")
             .layout(size=(6, 4))
-            .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-4-{name}.pdf"))
+            .save(Path(result_dir, f"tsai-2023-sec-2-4-{name}.pdf"))
         )
 
 
 def tsai_2023_sec_2_5_experiment(
+    data_dir: Path,
+    result_dir: Path,
     bootstrap_runs: int = 10,
     plot_population_density_values: Iterable[float] = np.linspace(0, 10_000, 25),
     plot_years: Iterable[int] = np.arange(1998, 2023),
@@ -561,7 +572,7 @@ def tsai_2023_sec_2_5_experiment(
     # data
 
     df_vehicle_stock: pd.DataFrame = get_tsai_sec_2_5_data(
-        data_dir=FLAGS.data_dir, vehicle=vehicle
+        data_dir=data_dir, vehicle=vehicle
     )
     min_year: int = df_vehicle_stock.year.min()
 
@@ -646,11 +657,13 @@ def tsai_2023_sec_2_5_experiment(
         )
         .label(x="Population Density", y=f"{vehicle_title} Stock Density")
         .layout(size=(6, 4))
-        .save(Path(FLAGS.result_dir, f"tsai-2023-sec-2-5.pdf"))
+        .save(Path(result_dir, f"tsai-2023-sec-2-5.pdf"))
     )
 
 
 def tsai_2023_sec_3_1_experiment(
+    data_dir: Path,
+    result_dir: Path,
     income_bins_total: int = 100,
     income_bins_removed: int = 1,
     bootstrap_runs: int = 300,
@@ -668,19 +681,17 @@ def tsai_2023_sec_3_1_experiment(
 
     # data
 
-    s_population: pd.Series = get_population_series(FLAGS.data_dir)
-    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        FLAGS.data_dir, vehicle=vehicle
-    )
+    s_population: pd.Series = get_population_series(data_dir)
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(data_dir, vehicle=vehicle)
 
     # make sure gini is extrapolated to the desired years
     s_gini: pd.Series = get_gini_series(
-        FLAGS.data_dir, extrapolate_index=pd.Index(predict_years)
+        data_dir, extrapolate_index=pd.Index(predict_years)
     )
 
-    df_income: pd.DataFrame = get_income_dataframe(data_dir=FLAGS.data_dir, index=None)
+    df_income: pd.DataFrame = get_income_dataframe(data_dir=data_dir, index=None)
     df_vehicle_ownership: pd.DataFrame = get_tsai_sec_2_2_3_data(
-        FLAGS.data_dir, vehicle=vehicle, income_bins=income_bins_total
+        data_dir, vehicle=vehicle, income_bins=income_bins_total
     )
 
     # module
@@ -864,7 +875,7 @@ def tsai_2023_sec_3_1_experiment(
         )
         .label(x="Year", y=f"{vehicle_title} Stock")
         .layout(size=(6, 4))
-        .save(Path(FLAGS.result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.pdf"))
+        .save(Path(result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.pdf"))
     )
 
 
@@ -874,14 +885,16 @@ def main(_):
 
     logging.set_verbosity(logging.DEBUG)
 
-    vehicle_subsidy()
-    tsai_2023_sec_2_2_1_experiment()
-    tsai_2023_sec_2_2_2_experiment()
-    tsai_2023_sec_2_2_3_experiment()
-    tsai_2023_sec_2_3_experiment()
-    tsai_2023_sec_2_4_experiment()
-    tsai_2023_sec_2_5_experiment()
-    # tsai_2023_sec_3_1_experiment()
+    Path(FLAGS.result_dir).mkdir(parents=True, exist_ok=True)
+
+    vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
 
 
 if __name__ == "__main__":

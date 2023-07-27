@@ -1,5 +1,4 @@
 import enum
-import itertools
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -145,7 +144,7 @@ get_income_series = get_column_data_fn(
     index_column="year",
     value_column="total",
     value_column_rename="income",
-    available_value_columns=itertools.chain(["total"], map(to_camel_case, City)),
+    available_value_columns=["total"] + [to_camel_case(city) for city in City],
 )
 
 get_gdp_per_capita_series = get_column_data_fn(
