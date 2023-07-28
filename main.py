@@ -727,7 +727,9 @@ def tsai_2023_sec_3_1_experiment(
 
     years: Iterable[int] = sorted(set().union(existing_years).union(predict_years))
 
-    df_stocks: list[pd.DataFrame] = []
+    df_plots: list[pd.DataFrame] = []
+    df_plots.append(s_vehicle_stock.reset_index().assign(group=PlotGroup.EXISTING))
+
     for year in years:
         ownership_vals: list[int] = []
         for _ in rp.track(range(bootstrap_predict_runs), description=f"Year {year}"):
@@ -782,20 +784,20 @@ def tsai_2023_sec_3_1_experiment(
             ]
 
         for percentage, group in percentage_groups:
-            df_stocks.append(
+            df_plots.append(
                 df_stock.loc[df_stock["percentage"] == percentage].assign(
                     year=year, group=group
                 )
             )
 
-    df_stock = pd.concat(df_stocks, ignore_index=True)
+    df_plot = pd.concat(df_plots, ignore_index=True)
 
     # offset the predicted vehicle stock to match the existing vehicle stock
 
-    s_vehicle_stock_predicted: pd.Series = df_stock.loc[
+    s_vehicle_stock_predicted: pd.Series = df_plot.loc[
         (
-            df_stock["year"].isin(existing_years)
-            & (df_stock["group"] == PlotGroup.PREDICTION_OF_EXISTING)
+            df_plot["year"].isin(existing_years)
+            & (df_plot["group"] == PlotGroup.PREDICTION_OF_EXISTING)
         )
     ].set_index("year")["vehicle_stock"]
     offset: float = pd.Series.mean(
@@ -804,19 +806,10 @@ def tsai_2023_sec_3_1_experiment(
             - s_vehicle_stock_predicted
         )
     )
-    df_stock["vehicle_stock"] += offset
+    df_plot.loc[df_plot["group"] != PlotGroup.EXISTING, "vehicle_stock"] += offset
 
     # plot
 
-    plot_objs: list[dict[str, Any]] = []
-    plot_objs.extend(
-        s_vehicle_stock.reset_index()
-        .assign(group=PlotGroup.EXISTING)
-        .to_dict(orient="records")
-    )
-    plot_objs.extend(df_stock.to_dict(orient="records"))
-
-    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
     df_plot = df_plot.loc[df_plot["year"].isin(plot_years)]
     (
         so.Plot(
@@ -862,6 +855,14 @@ def tsai_2023_sec_3_1_experiment(
         .label(x="Year", y=f"{vehicle_title} Stock")
         .layout(size=(6, 4))
         .save(Path(result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.pdf"))
+    )
+
+    # save csv
+
+    (
+        df_plot.drop(columns="group")
+        .assign(vehicle=vehicle.value)
+        .to_csv(Path(result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.csv"), index=False)
     )
 
 
