@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import scipy.optimize
+from absl import logging
 
 
 class Vehicle(str, enum.Enum):
@@ -50,16 +51,22 @@ def to_snake_case(s: str, upper: bool = True) -> str:
     return s.upper() if upper else s.lower()
 
 
-DEFAULT_YEAR_INDEX: pd.Index = pd.RangeIndex(1990, 2051, name="year")
+def linear_fn(v: float, a: float, b: float) -> float:
+    return a + b * v
 
 
 def extrapolate_series(
     s: pd.Series,
     index: pd.Index,
-    fn: Callable | str = lambda v, a, b: a + b * v,
+    fn: Callable | str = linear_fn,
     use_original: bool = True,
 ) -> pd.Series:
-    s_extrapolated: pd.Series
+    logging.debug(
+        f"Extrapolating series={s.name} from index={s.index.values} to index={index.values} using "
+        f"method={fn}."
+    )
+
+    s_extrapolated: pd.Series | None
 
     if callable(fn):
         popt, _ = scipy.optimize.curve_fit(fn, s.index.values, s.values)
@@ -80,6 +87,7 @@ def extrapolate_series(
     else:
         raise NotImplementedError
 
+    assert s_extrapolated is not None
     return s_extrapolated
 
 
@@ -88,7 +96,7 @@ def get_column_data_fn(
     index_column: str,
     value_column: str | None = None,
     value_column_rename: str | None = None,
-    extrapolate_method: Callable | str = lambda v, a, b: a + b * v,
+    extrapolate_method: Callable | str = linear_fn,
     available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
     def get_column_data(
@@ -99,6 +107,10 @@ def get_column_data_fn(
         extrapolate_method: Callable | str = extrapolate_method,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
+        logging.info(
+            f"Loading csv={Path(data_dir, csv_name)!s}, column={value_column}."
+        )
+
         if value_column is None:
             raise ValueError(f"No value_column specified for csv_name={csv_name}. ")
 
@@ -240,7 +252,8 @@ def get_vehicle_stock_series(
 
 
 def get_vehicle_stock_adjustment_series(
-    vehicle: Vehicle, extrapolate_index: pd.Index | None = None
+    vehicle: Vehicle,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.Series:
     match vehicle:
         case Vehicle.CAR:
@@ -276,23 +289,25 @@ def get_vehicle_stock_adjustment_series(
 
     if extrapolate_index is not None:
         s = extrapolate_series(s, index=extrapolate_index)
+
     return s
 
 
 def get_income_dataframe(
     data_dir: Path,
-    index: pd.Index | None = DEFAULT_YEAR_INDEX,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
-    s_income: pd.Series = get_income_series(data_dir=data_dir, extrapolate_index=index)
-    s_gini: pd.Series = get_gini_series(data_dir=data_dir, extrapolate_index=index)
+    s_income: pd.Series = get_income_series(
+        data_dir=data_dir, extrapolate_index=extrapolate_index
+    )
+    s_gini: pd.Series = get_gini_series(
+        data_dir=data_dir, extrapolate_index=extrapolate_index
+    )
     s_deflation: pd.Series = get_deflation_series(
-        data_dir=data_dir, extrapolate_index=index
+        data_dir=data_dir, extrapolate_index=extrapolate_index
     )
 
     df: pd.DataFrame = pd.concat([s_income, s_gini, s_deflation], axis=1).dropna()
-    if index is not None:
-        df = df.loc[index]
-
     df["adjusted_income"] = df.income / (df.deflation / 100)
 
     return df
@@ -300,18 +315,16 @@ def get_income_dataframe(
 
 def get_gdp_dataframe(
     data_dir: Path,
-    index: pd.Index | None = DEFAULT_YEAR_INDEX,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     s_gdp_per_capita: pd.Series = get_gdp_per_capita_series(
-        data_dir, extrapolate_index=index
+        data_dir=data_dir, extrapolate_index=extrapolate_index
     )
     s_deflation: pd.Series = get_deflation_series(
-        data_dir=data_dir, extrapolate_index=index
+        data_dir=data_dir, extrapolate_index=extrapolate_index
     )
 
-    df: pd.DataFrame = (
-        pd.concat([s_gdp_per_capita, s_deflation], axis=1).loc[index].sort_index()
-    )
+    df: pd.DataFrame = pd.concat([s_gdp_per_capita, s_deflation], axis=1).dropna()
     df["adjusted_gdp_per_capita"] = df.gdp_per_capita / (df.deflation / 100)
 
     return df
@@ -320,7 +333,7 @@ def get_gdp_dataframe(
 def get_city_population_dataframe(
     data_dir: Path,
     cities: Iterable[City] = City,
-    extrapolate_index: pd.Index | None = DEFAULT_YEAR_INDEX,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     dfs: list[pd.DataFrame] = []
     for city in cities:

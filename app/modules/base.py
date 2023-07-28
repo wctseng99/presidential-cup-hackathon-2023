@@ -1,5 +1,6 @@
 import abc
 import itertools
+import random
 from collections.abc import Iterable
 from typing import Any
 
@@ -107,6 +108,7 @@ class BootstrapModule(Module):
         self,
         output: Any = None,
         quantile: float | Iterable[float] | None = None,
+        run_one: bool = False,
         **inputs: sp.Basic,
     ) -> Any:
         if self.param_by_symbol_list is None:
@@ -114,6 +116,15 @@ class BootstrapModule(Module):
 
         if output is None:
             output = self.output()
+
+        if run_one:
+            if quantile is not None:
+                logging.warning(
+                    "Argument `quantile` is ignored when `run_one` is set to `True`. "
+                )
+
+            self.module.param_by_symbol = random.choice(self.param_by_symbol_list)
+            return self.module.__call__(output, **inputs)
 
         _outputs: list[Any] = []
         for param_by_symbol in self.param_by_symbol_list:
@@ -133,7 +144,7 @@ class BootstrapModule(Module):
     def _fit(self, *args: Any, **kwargs: Any) -> list[dict[sp.Basic, float]]:  # type: ignore
         param_by_symbol_list = []
         for run in range(self.runs):
-            logging.info(f"Bootstrap iteration {run + 1}")
+            logging.debug(f"Bootstrap iteration {run + 1}")
 
             module: Module = self.module
             module.fit(*args, **kwargs)

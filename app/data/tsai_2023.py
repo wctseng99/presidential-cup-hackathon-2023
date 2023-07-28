@@ -76,10 +76,12 @@ def get_tsai_sec_2_3_data(
     data_dir: Path,
     vehicle: Vehicle,
 ) -> pd.DataFrame:
-    s_vehicle_stock: pd.Series = get_vehicle_stock_series(data_dir, vehicle=vehicle)
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
+        data_dir=data_dir, vehicle=vehicle
+    )
     index: pd.Index = s_vehicle_stock.index
 
-    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir, index=index)
+    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir=data_dir, extrapolate_index=index)
     df = pd.concat([s_vehicle_stock, df_gdp], axis=1).loc[index]
 
     return df
@@ -89,11 +91,15 @@ def get_tsai_sec_2_4_data(
     data_dir: Path,
     vehicle: Vehicle,
 ) -> pd.DataFrame:
-    s_vehicle_stock: pd.Series = get_vehicle_stock_series(data_dir, vehicle=vehicle)
+    s_vehicle_stock: pd.Series = get_vehicle_stock_series(
+        data_dir=data_dir, vehicle=vehicle
+    )
     index: pd.Index = s_vehicle_stock.index
 
-    s_population: pd.Series = get_population_series(data_dir, extrapolate_index=index)
-    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir, index=index)
+    s_population: pd.Series = get_population_series(
+        data_dir=data_dir, extrapolate_index=index
+    )
+    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir=data_dir, extrapolate_index=index)
 
     df = pd.concat([s_vehicle_stock, s_population, df_gdp], axis=1).loc[index]
     df["log_gdp_per_capita"] = np.log(df.adjusted_gdp_per_capita)
@@ -113,7 +119,7 @@ def get_tsai_sec_2_5_data(
             continue
 
         s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-            data_dir, vehicle=vehicle, city=city
+            data_dir=data_dir, vehicle=vehicle, city=city
         )
         df_vehicle_stocks.append(s_vehicle_stock.reset_index().assign(city=city.value))
 
@@ -121,9 +127,9 @@ def get_tsai_sec_2_5_data(
     cities: Iterable[City] = map(City, df_vehicle_stock.city.unique())
     years: Iterable[int] = df_vehicle_stock.year.sort_values().unique()
 
-    s_city_area: pd.Series = get_city_area_series(data_dir)
+    s_city_area: pd.Series = get_city_area_series(data_dir=data_dir)
     df_population: pd.DataFrame = get_city_population_dataframe(
-        data_dir, cities=cities, extrapolate_index=pd.Index(years, name="year")
+        data_dir=data_dir, cities=cities, extrapolate_index=pd.Index(years, name="year")
     )
 
     df = df_vehicle_stock.merge(s_city_area, on="city", how="left").merge(

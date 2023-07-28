@@ -78,8 +78,10 @@ def test_tsai_2023_sec_3_1_experiment(data_dir: Path, result_dir: Path):
     tsai_2023_sec_3_1_experiment(
         data_dir,
         result_dir,
-        bootstrap_runs=1,
+        bootstrap_fit_runs=1,
+        bootstrap_predict_runs=1,
         integrate_sigma=1,
+        existing_years=np.arange(1998, 1999),
         predict_years=np.arange(2020, 2021),
         plot_years=np.arange(2000, 2021),
     )
