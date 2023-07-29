@@ -856,13 +856,13 @@ def main(_):
 
     Path(FLAGS.result_dir).mkdir(parents=True, exist_ok=True)
 
-    # vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
     tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
 
 
