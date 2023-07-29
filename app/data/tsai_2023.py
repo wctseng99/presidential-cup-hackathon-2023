@@ -75,14 +75,18 @@ def get_tsai_sec_2_2_3_data(
 def get_tsai_sec_2_3_data(
     data_dir: Path,
     vehicle: Vehicle,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        data_dir=data_dir, vehicle=vehicle
+        data_dir=data_dir, vehicle=vehicle, extrapolate_index=extrapolate_index
     )
-    index: pd.Index = s_vehicle_stock.index
+    if extrapolate_index is None:
+        extrapolate_index = s_vehicle_stock.index
 
-    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir=data_dir, extrapolate_index=index)
-    df = pd.concat([s_vehicle_stock, df_gdp], axis=1).loc[index]
+    df_gdp: pd.DataFrame = get_gdp_dataframe(
+        data_dir=data_dir, extrapolate_index=extrapolate_index
+    )
+    df = pd.concat([s_vehicle_stock, df_gdp], axis=1).loc[extrapolate_index]
 
     return df
 
@@ -90,18 +94,24 @@ def get_tsai_sec_2_3_data(
 def get_tsai_sec_2_4_data(
     data_dir: Path,
     vehicle: Vehicle,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-        data_dir=data_dir, vehicle=vehicle
+        data_dir=data_dir, vehicle=vehicle, extrapolate_index=extrapolate_index
     )
-    index: pd.Index = s_vehicle_stock.index
+    if extrapolate_index is None:
+        extrapolate_index = s_vehicle_stock.index
 
     s_population: pd.Series = get_population_series(
-        data_dir=data_dir, extrapolate_index=index
+        data_dir=data_dir, extrapolate_index=extrapolate_index
     )
-    df_gdp: pd.DataFrame = get_gdp_dataframe(data_dir=data_dir, extrapolate_index=index)
+    df_gdp: pd.DataFrame = get_gdp_dataframe(
+        data_dir=data_dir, extrapolate_index=extrapolate_index
+    )
 
-    df = pd.concat([s_vehicle_stock, s_population, df_gdp], axis=1).loc[index]
+    df = pd.concat([s_vehicle_stock, s_population, df_gdp], axis=1).loc[
+        extrapolate_index
+    ]
     df["log_gdp_per_capita"] = np.log(df.adjusted_gdp_per_capita)
 
     return df
@@ -110,21 +120,21 @@ def get_tsai_sec_2_4_data(
 def get_tsai_sec_2_5_data(
     data_dir: Path,
     vehicle: Vehicle,
-    exclude_cities: set[City] = set([City.JINMA]),
+    cities: Iterable[City],
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     df_vehicle_stock: pd.DataFrame
     df_vehicle_stocks: list[pd.DataFrame] = []
-    for city in City:
-        if city in exclude_cities:
-            continue
-
+    for city in cities:
         s_vehicle_stock: pd.Series = get_vehicle_stock_series(
-            data_dir=data_dir, vehicle=vehicle, city=city
+            data_dir=data_dir,
+            vehicle=vehicle,
+            city=city,
+            extrapolate_index=extrapolate_index,
         )
         df_vehicle_stocks.append(s_vehicle_stock.reset_index().assign(city=city.value))
 
     df_vehicle_stock = pd.concat(df_vehicle_stocks, axis=0)
-    cities: Iterable[City] = map(City, df_vehicle_stock.city.unique())
     years: Iterable[int] = df_vehicle_stock.year.sort_values().unique()
 
     s_city_area: pd.Series = get_city_area_series(data_dir=data_dir)

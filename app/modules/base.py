@@ -1,4 +1,5 @@
 import abc
+import dataclasses
 import itertools
 import random
 from collections.abc import Iterable
@@ -9,6 +10,7 @@ import sympy as sp
 from absl import logging
 
 
+@dataclasses.dataclass(kw_only=True)  # type: ignore
 class BaseModule(abc.ABC):
     @classmethod
     def subs(cls, value: Any, *args: Any, **kwargs: Any) -> Any:
@@ -29,7 +31,7 @@ class BaseModule(abc.ABC):
     def output(self) -> Any:
         ...
 
-    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+    def __call__(self, output: Any = None, **inputs: float | sp.Basic) -> Any:
         if output is None:
             output = self.output()
 
@@ -40,9 +42,13 @@ class BaseModule(abc.ABC):
         return self.subs(output, input_by_symbol)
 
 
+@dataclasses.dataclass(kw_only=True)  # type: ignore
 class Module(BaseModule):
-    def __init__(self):
-        self.param_by_symbol: dict[sp.Basic, float] | None = None
+    param_by_symbol: dict[sp.Basic, float] | None = None
+
+    @property
+    def is_fitted(self) -> bool:
+        return self.param_by_symbol is not None
 
     @abc.abstractmethod
     def _fit(self, *args: Any, **kwargs: Any) -> dict[sp.Basic, float]:
@@ -80,7 +86,7 @@ class Module(BaseModule):
 
         self.param_by_symbol = self._fit(*args, **kwargs)
 
-    def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+    def __call__(self, output: Any = None, **inputs: float | sp.Basic) -> Any:
         if self.param_by_symbol is None:
             raise RuntimeError("Module has not been fitted")
 
@@ -94,22 +100,25 @@ class Module(BaseModule):
         return self.subs(output, input_by_symbol | self.param_by_symbol)
 
 
+@dataclasses.dataclass(kw_only=True)
 class BootstrapModule(Module):
-    def __init__(self, module: Module, runs: int = 100):
-        self.module = module
-        self.runs = runs
+    module: Module
+    runs: int = 100
+    param_by_symbol_list: list[dict[sp.Basic, float]] | None = None
 
-        self.param_by_symbol_list: list[dict[sp.Basic, float]] | None = None
+    @property
+    def is_fitted(self) -> bool:
+        return self.param_by_symbol_list is not None
 
     def output(self) -> Any:
         return self.module.output()
 
-    def __call__(
+    def __call__(  # type: ignore
         self,
         output: Any = None,
         quantile: float | Iterable[float] | None = None,
         run_one: bool = False,
-        **inputs: sp.Basic,
+        **inputs: float | sp.Basic,
     ) -> Any:
         if self.param_by_symbol_list is None:
             raise RuntimeError("Module has not been fitted")

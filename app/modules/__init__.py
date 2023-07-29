@@ -7,7 +7,7 @@ from app.modules.core import (
 )
 from app.modules.nie_2022 import VehicleSubsidyModule
 from app.modules.tsai_2023 import (
-    BusStockModule,
+    BusStockDensityModule,
     CarOwnershipModule,
     CarOwnershipModuleV2,
     IncomeDistributionModule,

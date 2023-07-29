@@ -19,6 +19,7 @@ class Vehicle(str, enum.Enum):
 
 
 class City(str, enum.Enum):
+    TAIWAN = "TAIWAN"
     NEW_TAIPEI = "NEW_TAIPEI"
     TAIPEI = "TAIPEI"
     TAOYUAN = "TAOYUAN"
@@ -107,7 +108,7 @@ def get_column_data_fn(
         extrapolate_method: Callable | str = extrapolate_method,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
-        logging.info(
+        logging.debug(
             f"Loading csv={Path(data_dir, csv_name)!s}, column={value_column}."
         )
 
@@ -194,7 +195,9 @@ def get_city_area_series(data_dir: Path) -> pd.Series:
         value_column="area",
     )
     s: pd.Series = _get_city_area_series(data_dir=data_dir)
-    s.index = s.index.map(to_snake_case)
+    s.index = s.index.map(
+        lambda city_str: "TAIWAN" if city_str == "total" else to_snake_case(city_str)
+    )
 
     return s
 
@@ -223,7 +226,7 @@ def get_vehicle_survival_rate_series(
 def get_vehicle_stock_series(
     data_dir: Path,
     vehicle: Vehicle,
-    city: City | None = None,
+    city: City = City.TAIWAN,
     extrapolate_index: pd.Index | None = None,
 ) -> pd.Series:
     if vehicle not in [
@@ -238,12 +241,11 @@ def get_vehicle_stock_series(
         raise ValueError(f"Invalid vehicle_str type: {vehicle}")
 
     vehicle_str: str = vehicle.value.lower()
-    city_str: str = "total" if city is None else to_camel_case(city)
 
     _get_vehicle_stock_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name=f"stock/stock_{vehicle_str}.csv",
         index_column="year",
-        value_column=city_str,
+        value_column="total" if city is City.TAIWAN else to_camel_case(city),
         value_column_rename="vehicle_stock",
     )
     return _get_vehicle_stock_series(
@@ -332,16 +334,23 @@ def get_gdp_dataframe(
 
 def get_city_population_dataframe(
     data_dir: Path,
-    cities: Iterable[City] = City,
+    cities: Iterable[City] = list(City),
     extrapolate_index: pd.Index | None = None,
 ) -> pd.DataFrame:
     dfs: list[pd.DataFrame] = []
     for city in cities:
-        s_population: pd.Series = get_city_population_series(
-            data_dir=data_dir,
-            value_column=to_camel_case(city),
-            extrapolate_index=extrapolate_index,
-        )
+        s_population: pd.Series
+        if city is City.TAIWAN:
+            s_population = get_population_series(
+                data_dir=data_dir, extrapolate_index=extrapolate_index
+            )
+        else:
+            s_population = get_city_population_series(
+                data_dir=data_dir,
+                value_column=to_camel_case(city),
+                extrapolate_index=extrapolate_index,
+            )
+
         dfs.append(s_population.reset_index().assign(city=city.value))
 
     df: pd.DataFrame = pd.concat(dfs, ignore_index=True)

@@ -235,7 +235,7 @@ class TruckStockModule(LinearModule):
 
 
 # Section 2.5: Bus Module
-class BusStockModule(Module):
+class BusStockDensityModule(Module):
     def __init__(self):
         self.sigmoid_curve = SigmoidCurveModule()
         self.linear = LinearModule(bias=False)

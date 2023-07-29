@@ -1,9 +1,11 @@
 from app.data.core import (
+    City,
     Vehicle,
     extrapolate_series,
     get_city_population_dataframe,
     get_column_data_fn,
     get_deflation_series,
+    get_gdp_dataframe,
     get_gdp_per_capita_series,
     get_gini_series,
     get_income_dataframe,
