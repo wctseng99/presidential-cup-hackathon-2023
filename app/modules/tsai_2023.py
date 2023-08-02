@@ -24,6 +24,27 @@ from app.modules.core import (
 )
 
 
+# Section 2.1: Stock and sales
+class VehicleCompositionModule(BaseModule):
+    def __init__(self, dims: int):
+        survival_rate = sp.symarray("SR", dims)
+
+        delta_survival_rate = -np.diff(survival_rate)
+
+        self.survival_rate = survival_rate
+        self.delta_survival_rate = delta_survival_rate
+
+        breakpoint()
+
+    # sales_replacement[i] = conv(sales[i], delta_survival[i])
+    # sales_new[i] = stock[i] - stock[i - 1]
+    # delta_survival[i] = survival[i] - survival[i - 1]
+    # sales[i] = sales_new[i] + sales_replacement[i]
+
+    def output(self):
+        pass
+
+
 # Section 2.2.1: Stock and Sales
 class VehicleSurvivalRateModule(Module):
     def __init__(self):
@@ -302,3 +323,7 @@ class BusStockDensityModule(Module):
             self.sigmoid_curve.beta: beta,
             self.linear.a[0]: a_0,
         }
+
+
+if __name__ == "__main__":
+    module = VehicleCompositionModule(dims=25)

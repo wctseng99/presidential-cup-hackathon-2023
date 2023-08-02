@@ -1,5 +1,6 @@
 from app.data.core import (
     City,
+    Fuel,
     Vehicle,
     extrapolate_series,
     get_city_population_dataframe,
@@ -11,6 +12,7 @@ from app.data.core import (
     get_income_dataframe,
     get_income_series,
     get_population_series,
+    get_vehicle_market_share_series,
     get_vehicle_ownership_dataframe,
     get_vehicle_stock_adjustment_series,
     get_vehicle_stock_series,

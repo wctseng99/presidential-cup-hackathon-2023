@@ -1,4 +1,5 @@
 import enum
+import functools
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -13,9 +14,20 @@ class Vehicle(str, enum.Enum):
     SCOOTER = "SCOOTER"
     OPERATING_CAR = "OPERATING_CAR"
     BUS = "BUS"
-    TRUCK = "TRUCK"
+
+    TRUCK = "TRUCK"  # contains the following two
     LIGHT_TRUCK = "LIGHT_TRUCK"
     HEAVY_TRUCK = "HEAVY_TRUCK"
+
+
+class Fuel(str, enum.Enum):
+    INTERNAL_COMBUSTION = "INTERNAL_COMBUSTION"  # contains the following two
+    GASOLINE = "GASOLINE"
+    DIESEL = "DIESEL"
+
+    ELECTRIC = "ELECTRIC"  # contains the following two
+    BATTERY_ELECTRIC = "BATTERY_ELECTRIC"
+    FULL_CELL_ELECTRIC = "FULL_CELL_ELECTRIC"
 
 
 class City(str, enum.Enum):
@@ -97,6 +109,7 @@ def get_column_data_fn(
     index_column: str,
     value_column: str | None = None,
     value_column_rename: str | None = None,
+    sheet_name: str | None = None,  # only used by excel
     extrapolate_method: Callable | str = linear_fn,
     available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
@@ -104,6 +117,7 @@ def get_column_data_fn(
         data_dir: Path,
         # in some cases, we want to load other columns other than the default `value_column`
         value_column: str | None = value_column,
+        sheet_name: str | None = sheet_name,
         extrapolate_index: pd.Index | None = None,
         extrapolate_method: Callable | str = extrapolate_method,
         extrapolate_use_original: bool = True,
@@ -125,7 +139,26 @@ def get_column_data_fn(
             )
 
         csv_path: Path = Path(data_dir, csv_name)
-        df: pd.DataFrame = pd.read_csv(
+
+        read_fn: Callable[..., pd.DataFrame]
+        if csv_path.suffix == ".csv":
+            read_fn = pd.read_csv
+        elif csv_path.suffix in [
+            ".xls",
+            ".xlsx",
+            ".xlsm",
+            ".xlsb",
+            ".odf",
+            ".ods",
+            ".odt",
+        ]:
+            read_fn = pd.read_excel
+            if sheet_name is not None:
+                read_fn = functools.partial(read_fn, sheet_name=sheet_name)
+        else:
+            raise ValueError(f"Invalid file extension for csv_path={csv_path}.")
+
+        df: pd.DataFrame = read_fn(
             csv_path, index_col=index_column, usecols=[index_column, value_column]
         )
         s: pd.Series = df[value_column]
@@ -291,6 +324,30 @@ def get_vehicle_stock_adjustment_series(
 
     if extrapolate_index is not None:
         s = extrapolate_series(s, index=extrapolate_index)
+
+    return s
+
+
+def get_vehicle_market_share_series(
+    data_dir: Path,
+    vehicle: Vehicle,
+    fuel: Fuel,
+    scenario: str,
+    drop_year_after: int = 2023,  # we do not want to assume future market share
+) -> pd.Series:
+    _get_vehicle_market_share_series: Callable[..., pd.Series] = get_column_data_fn(
+        csv_name=f"marketshare/{scenario}.xlsx",
+        index_column="year",
+        value_column={
+            Fuel.INTERNAL_COMBUSTION: "ICEV",
+            Fuel.BATTERY_ELECTRIC: "BEV",
+            Fuel.FULL_CELL_ELECTRIC: "FCEV",
+        }.get(fuel),
+        value_column_rename="market_share",
+        sheet_name=vehicle.value.lower(),
+    )
+    s: pd.Series = _get_vehicle_market_share_series(data_dir=data_dir)
+    s = s.loc[s.index <= drop_year_after]
 
     return s
 

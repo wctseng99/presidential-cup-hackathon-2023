@@ -1,6 +1,6 @@
 import dataclasses
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import ClassVar
 
@@ -45,6 +45,7 @@ class CarStockPipeline(PerYearPipeline):
     bootstrap_fit_runs: int = 300
     bootstrap_predict_runs: int = 300
     integrate_sigma: float = 64
+    quantiles: Iterable[float] = (0.025, 0.5, 0.975)
 
     income_module: LinearModule = dataclasses.field(default_factory=LinearModule)
     income_distribution_module: IncomeDistributionModule = dataclasses.field(
@@ -129,10 +130,10 @@ class CarStockPipeline(PerYearPipeline):
 
         df: pd.DataFrame = (
             pd.Series(vehicle_ownership_vals, name="adjusted_vehicle_ownership")
-            .astype(float)
-            .quantile([0.025, 0.5, 0.975])
+            .quantile(self.quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
+            .astype(np.float32)
         )
         df["vehicle_stock"] = (
             df["adjusted_vehicle_ownership"].mul(s_population[year]).astype(int)
@@ -157,6 +158,7 @@ class OperatingCarStockPipeline(PerYearPipeline):
     data_dir: Path
     bootstrap_fit_runs: int = 1000
     bootstrap_predict_runs: int = 1000
+    quantiles: Iterable[float] = (0.025, 0.5, 0.975)
 
     vehicle_stock_module: OperatingCarStockModule = dataclasses.field(
         default_factory=OperatingCarStockModule
@@ -198,10 +200,10 @@ class OperatingCarStockPipeline(PerYearPipeline):
 
         df: pd.DataFrame = (
             pd.Series(vehicle_stock_vals, name="vehicle_stock")
-            .astype(float)
-            .quantile([0.025, 0.5, 0.975])
+            .quantile(self.quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
+            .astype(np.float32)
         )
         df["adjusted_vehicle_ownership"] = df["vehicle_stock"].div(
             s_population.loc[year]
@@ -217,6 +219,7 @@ class TruckStockPipeline(PerYearPipeline):
     data_dir: Path
     bootstrap_fit_runs: int = 1000
     bootstrap_predict_runs: int = 1000
+    quantiles: Iterable[float] = (0.025, 0.5, 0.975)
 
     vehicle_stock_module: TruckStockModule = dataclasses.field(
         default_factory=TruckStockModule
@@ -262,10 +265,10 @@ class TruckStockPipeline(PerYearPipeline):
 
         df: pd.DataFrame = (
             pd.Series(vehicle_stock_vals, name="vehicle_stock")
-            .astype(float)
-            .quantile([0.025, 0.5, 0.975])
+            .quantile(self.quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
+            .astype(np.float32)
         )
         df["adjusted_vehicle_ownership"] = df["vehicle_stock"].div(
             s_population.loc[year]
@@ -281,6 +284,7 @@ class BusStockPipeline(PerYearPipeline):
     data_dir: Path
     bootstrap_fit_runs: int = 1000
     bootstrap_predict_runs: int = 1000
+    quantiles: Iterable[float] = (0.025, 0.5, 0.975)
 
     vehicle_stock_density_module: BusStockDensityModule = dataclasses.field(
         default_factory=BusStockDensityModule
@@ -339,10 +343,10 @@ class BusStockPipeline(PerYearPipeline):
 
         df: pd.DataFrame = (
             pd.Series(vehicle_stock_density_vals, name="adjusted_vehicle_ownership")
-            .astype(float)
-            .quantile([0.025, 0.5, 0.975])
+            .quantile(self.quantiles)
             .rename_axis(index={None: "percentage"})
             .reset_index()
+            .astype(np.float32)
         )
         df["vehicle_stock"] = df["adjusted_vehicle_ownership"].mul(s_population[year])
 

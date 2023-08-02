@@ -675,8 +675,9 @@ def tsai_2023_sec_3_1_experiment(
     data_dir: Path,
     result_dir: Path,
     bootstrap_fit_runs: int = 1000,
-    bootstrap_predict_runs: int = 300,
+    bootstrap_predict_runs: int = 1000,
     integrate_sigma: float = 64,
+    quantiles: Iterable[float] = np.arange(0, 1.001, 0.025),
     predict_years: Iterable[int] = np.arange(2022, 2051),
     plot_years: Iterable[int] = np.arange(2000, 2050),
 ):
@@ -708,6 +709,7 @@ def tsai_2023_sec_3_1_experiment(
                     bootstrap_fit_runs=bootstrap_fit_runs,
                     bootstrap_predict_runs=bootstrap_predict_runs,
                     integrate_sigma=integrate_sigma,
+                    quantiles=quantiles,
                 )
             case Vehicle.SCOOTER:
                 pipeline = ScooterStockPipeline(
@@ -715,24 +717,28 @@ def tsai_2023_sec_3_1_experiment(
                     bootstrap_fit_runs=bootstrap_fit_runs,
                     bootstrap_predict_runs=bootstrap_predict_runs,
                     integrate_sigma=integrate_sigma,
+                    quantiles=quantiles,
                 )
             case Vehicle.OPERATING_CAR:
                 pipeline = OperatingCarStockPipeline(
                     data_dir=data_dir,
                     bootstrap_fit_runs=bootstrap_fit_runs,
                     bootstrap_predict_runs=bootstrap_predict_runs,
+                    quantiles=quantiles,
                 )
             case Vehicle.TRUCK:
                 pipeline = TruckStockPipeline(
                     data_dir=data_dir,
                     bootstrap_fit_runs=bootstrap_fit_runs,
                     bootstrap_predict_runs=bootstrap_predict_runs,
+                    quantiles=quantiles,
                 )
             case Vehicle.BUS:
                 pipeline = BusStockPipeline(
                     data_dir=data_dir,
                     bootstrap_fit_runs=bootstrap_fit_runs,
                     bootstrap_predict_runs=bootstrap_predict_runs,
+                    quantiles=quantiles,
                 )
             case _:
                 raise ValueError(f"Invalid vehicle={vehicle}")
@@ -743,24 +749,33 @@ def tsai_2023_sec_3_1_experiment(
 
             df_plot: pd.DataFrame = pipeline(year=year)
 
-            percentage_groups: list[tuple[float, PlotGroup]]
+            df_group: pd.DataFrame
             if year in existing_years:
-                percentage_groups = [
-                    (0.5, PlotGroup.PREDICTION_OF_EXISTING),
-                ]
-            else:
-                percentage_groups = [
-                    (0.025, PlotGroup.PREDICTION_CI_LOW),
-                    (0.5, PlotGroup.PREDICTION),
-                    (0.975, PlotGroup.PREDICTION_CI_HIGH),
-                ]
-
-            for percentage, group in percentage_groups:
-                df_plots.append(
-                    df_plot.loc[df_plot["percentage"] == percentage].assign(
-                        year=year, group=group
-                    )
+                df_group = pd.DataFrame(
+                    {
+                        "percentage": [0.5],
+                        "group": [PlotGroup.PREDICTION_OF_EXISTING],
+                    },
                 )
+            else:
+                df_group = pd.DataFrame(
+                    {
+                        "percentage": [0.025, 0.5, 0.975],
+                        "group": [
+                            PlotGroup.PREDICTION_CI_LOW,
+                            PlotGroup.PREDICTION,
+                            PlotGroup.PREDICTION_CI_HIGH,
+                        ],
+                    },
+                )
+
+            # this is to ensure the floats match up in numerical accuracy
+            df_plot["percentage"] = df_plot["percentage"].astype(np.float32)
+            df_group["percentage"] = df_group["percentage"].astype(np.float32)
+
+            df_plots.append(
+                df_plot.merge(df_group, how="left", on="percentage").assign(year=year)
+            )
 
         df_plot = pd.concat(df_plots, ignore_index=True)
 
