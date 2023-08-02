@@ -253,7 +253,9 @@ def get_vehicle_survival_rate_series(
         value_column=vehicle_str,
         value_column_rename="survival_rate",
     )
-    return _get_vehicle_survival_rate_series(data_dir=data_dir)
+    s: pd.Series = _get_vehicle_survival_rate_series(data_dir=data_dir)
+    s = np.minimum(s, 1)  # there may be weird raw data
+    return s
 
 
 def get_vehicle_stock_series(
