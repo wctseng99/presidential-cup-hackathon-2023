@@ -6,21 +6,28 @@ from typing import ClassVar
 
 import numpy as np
 import pandas as pd
+import rich.progress
 import scipy.integrate
 import sympy as sp
+from absl import logging
 
 from app.data.core import (
     City,
+    Fuel,
     Vehicle,
     get_gini_series,
     get_income_dataframe,
     get_population_series,
+    get_vehicle_age_composition_series,
+    get_vehicle_market_share_series,
 )
 from app.data.tsai_2023 import (
     get_tsai_sec_2_2_3_data,
     get_tsai_sec_2_3_data,
     get_tsai_sec_2_4_data,
     get_tsai_sec_2_5_data,
+    get_tsai_vehicle_stock_series,
+    get_tsai_vehicle_survival_rate_series,
 )
 from app.modules.base import BootstrapModule
 from app.modules.core import LinearModule
@@ -31,6 +38,7 @@ from app.modules.tsai_2023 import (
     OperatingCarStockModule,
     ScooterOwnershipModule,
     TruckStockModule,
+    VehicleAgeCompositionModule,
 )
 from app.pipelines.base import PerYearPipeline
 
@@ -351,3 +359,144 @@ class BusStockPipeline(PerYearPipeline):
         df["vehicle_stock"] = df["adjusted_vehicle_ownership"].mul(s_population[year])
 
         return df
+
+
+@dataclasses.dataclass(kw_only=True)
+class CarCompositionPipeline(object):
+    VEHICLE: ClassVar[Vehicle] = Vehicle.CAR
+    FUELS: ClassVar[list[Fuel]] = [
+        Fuel.INTERNAL_COMBUSTION,
+        Fuel.BATTERY_ELECTRIC,
+        Fuel.FULL_CELL_ELECTRIC,
+    ]
+
+    data_dir: Path
+    result_dir: Path
+    scenario: str
+    max_age: int = 25
+
+    @functools.cached_property
+    def s_vehicle_stock(self) -> pd.Series:
+        return get_tsai_vehicle_stock_series(
+            result_dir=self.result_dir, vehicle=self.VEHICLE, percentage=0.5
+        )
+
+    # this is for internal combustion vehicles as we assume all vehicles are initially internal combustion
+    @functools.cached_property
+    def df_vehicle_age_composition(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                Fuel.INTERNAL_COMBUSTION: get_vehicle_age_composition_series(
+                    self.data_dir, vehicle=self.VEHICLE, max_age=self.max_age
+                ),
+                Fuel.BATTERY_ELECTRIC: pd.Series(
+                    0, index=pd.RangeIndex(self.max_age + 1, name="age")
+                ),
+                Fuel.FULL_CELL_ELECTRIC: pd.Series(
+                    0, index=pd.RangeIndex(self.max_age + 1, name="age")
+                ),
+            }
+        )
+
+    @functools.cached_property
+    def df_vehicle_survival_rate(self) -> pd.DataFrame:
+        s: pd.Series = get_tsai_vehicle_survival_rate_series(
+            self.data_dir,
+            result_dir=self.result_dir,
+            vehicle=self.VEHICLE,
+            max_age=self.max_age,
+        )
+        return pd.DataFrame({fuel: s for fuel in self.FUELS})
+
+    @functools.cached_property
+    def df_vehicle_market_share(self) -> pd.DataFrame:
+        index: pd.Index = pd.RangeIndex(2020, 2051, name="year")
+
+        return pd.DataFrame(
+            {
+                fuel: get_vehicle_market_share_series(
+                    self.data_dir,
+                    vehicle=self.VEHICLE,
+                    fuel=fuel,
+                    scenario=self.scenario,
+                    extrapolate_index=index,
+                )
+                for fuel in self.FUELS
+            }
+        )
+
+    def __call__(
+        self,
+        years: Iterable[int],
+        # index: year
+        s_vehicle_stock: pd.Series | None = None,
+        # index: age, column: fuel
+        df_vehicle_age_composition: pd.DataFrame | None = None,
+        # index: age, column: fuel
+        df_vehicle_survival_rate: pd.DataFrame | None = None,
+        # index: year, column: fuel
+        df_vehicle_market_share: pd.DataFrame | None = None,
+    ) -> tuple[dict[int, pd.Series], dict[int, pd.DataFrame]]:
+        years = list(years)
+
+        if s_vehicle_stock is None:
+            logging.info("`s_vehicle_stock` is None, using default")
+            s_vehicle_stock = self.s_vehicle_stock
+
+        if df_vehicle_age_composition is None:
+            logging.info("`df_vehicle_age_composition` is None, using default")
+            df_vehicle_age_composition = self.df_vehicle_age_composition
+
+        if df_vehicle_survival_rate is None:
+            logging.info("`df_vehicle_survival_rate` is None, using default")
+            df_vehicle_survival_rate = self.df_vehicle_survival_rate
+
+        if df_vehicle_market_share is None:
+            logging.info("`df_vehicle_market_share` is None, using default")
+            df_vehicle_market_share = self.df_vehicle_market_share
+
+        vehicle_sale_by_year: dict[int, pd.Series] = {}
+        df_vehicle_age_composition_by_year: dict[int, pd.DataFrame] = {}
+
+        for num, year in rich.progress.track(enumerate(years), total=len(years)):
+            if num == 0:
+                df_vehicle_age_composition_by_year[year - 1] = (
+                    s_vehicle_stock[year - 1] * df_vehicle_age_composition
+                )
+
+            df_vehicle_age_composition = df_vehicle_age_composition_by_year[year - 1]
+            total_new_vehicle_sale = s_vehicle_stock[year] - s_vehicle_stock[year - 1]
+            total_replacement_vehicle_sale = 0.0
+
+            new_df_vehicle_age_composition: pd.DataFrame = pd.DataFrame()
+            for fuel in self.FUELS:
+                s_vehicle_survival_rate = df_vehicle_survival_rate[fuel]
+                s_vehicle_age_composition = df_vehicle_age_composition[fuel]
+
+                module = VehicleAgeCompositionModule(dims=self.max_age + 1)
+                output = module(
+                    age_composition=s_vehicle_age_composition.values,
+                    survival_rate=s_vehicle_survival_rate.values,
+                )
+
+                new_df_vehicle_age_composition[fuel] = output["new_age_composition"]
+                total_replacement_vehicle_sale += output["replacement_sale"]
+
+            total_vehicle_sale = total_new_vehicle_sale + total_replacement_vehicle_sale
+
+            vehicle_sale: pd.Series = pd.Series(
+                {
+                    fuel: df_vehicle_market_share.loc[year, fuel] * total_vehicle_sale
+                    for fuel in self.FUELS
+                }
+            )
+            new_df_vehicle_age_composition.loc[0] = vehicle_sale
+
+            vehicle_sale_by_year[year] = vehicle_sale
+            df_vehicle_age_composition_by_year[year] = new_df_vehicle_age_composition
+
+            logging.debug(
+                f"For {year} vehicle vehicle_sale is {total_vehicle_sale}, age composition is {new_df_vehicle_age_composition}"
+            )
+
+        return vehicle_sale_by_year, df_vehicle_age_composition_by_year

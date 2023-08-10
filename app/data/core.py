@@ -122,9 +122,14 @@ def get_column_data_fn(
         extrapolate_method: Callable | str = extrapolate_method,
         extrapolate_use_original: bool = True,
     ) -> pd.Series:
-        logging.debug(
-            f"Loading csv={Path(data_dir, csv_name)!s}, column={value_column}."
-        )
+        if sheet_name is None:
+            logging.debug(
+                f"Loading csv={Path(data_dir, csv_name)!s}, column={value_column}."
+            )
+        else:
+            logging.debug(
+                f"Loading csv={Path(data_dir, csv_name)!s}, sheet={sheet_name}, column={value_column}."
+            )
 
         if value_column is None:
             raise ValueError(f"No value_column specified for csv_name={csv_name}. ")
@@ -235,6 +240,25 @@ def get_city_area_series(data_dir: Path) -> pd.Series:
     return s
 
 
+def get_vehicle_age_composition_series(
+    data_dir: Path,
+    vehicle: Vehicle,
+    max_age: int = 25,
+) -> pd.Series:
+    vehicle_str: str = vehicle.value.lower()
+    _get_vehicle_age_composition_series: Callable[..., pd.Series] = get_column_data_fn(
+        csv_name="vehicle_age_composition.csv",
+        index_column="age",
+        value_column=vehicle_str,
+        value_column_rename="vehicle_age_composition",
+    )
+    s: pd.Series = _get_vehicle_age_composition_series(data_dir=data_dir)
+    s.loc[max_age] = s.loc[s.index >= max_age].sum()
+
+    s = s.reindex(pd.RangeIndex(max_age + 1, name="age"), fill_value=0)
+    return s
+
+
 def get_vehicle_survival_rate_series(
     data_dir: Path,
     vehicle: Vehicle,
@@ -335,7 +359,8 @@ def get_vehicle_market_share_series(
     vehicle: Vehicle,
     fuel: Fuel,
     scenario: str,
-    drop_year_after: int = 2023,  # we do not want to assume future market share
+    drop_year_after: int = 2040,
+    extrapolate_index: pd.Index | None = None,
 ) -> pd.Series:
     _get_vehicle_market_share_series: Callable[..., pd.Series] = get_column_data_fn(
         csv_name=f"marketshare/{scenario}.xlsx",
@@ -343,13 +368,16 @@ def get_vehicle_market_share_series(
         value_column={
             Fuel.INTERNAL_COMBUSTION: "ICEV",
             Fuel.BATTERY_ELECTRIC: "BEV",
-            Fuel.FULL_CELL_ELECTRIC: "FCEV",
+            Fuel.FULL_CELL_ELECTRIC: "FCV",
         }.get(fuel),
         value_column_rename="market_share",
         sheet_name=vehicle.value.lower(),
     )
-    s: pd.Series = _get_vehicle_market_share_series(data_dir=data_dir)
+    s: pd.Series = _get_vehicle_market_share_series(data_dir=data_dir) / 100.0
     s = s.loc[s.index <= drop_year_after]
+
+    if extrapolate_index is not None:
+        s = extrapolate_series(s, index=extrapolate_index, fn="pad")
 
     return s
 

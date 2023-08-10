@@ -25,24 +25,33 @@ from app.modules.core import (
 
 
 # Section 2.1: Stock and sales
-class VehicleCompositionModule(BaseModule):
-    def __init__(self, dims: int):
+class VehicleAgeCompositionModule(BaseModule):
+    def __init__(self, dims: int, epsilon: float = 1e-9):
+        age_composition = sp.symarray("VC", dims)
         survival_rate = sp.symarray("SR", dims)
 
-        delta_survival_rate = -np.diff(survival_rate)
+        new_age_composition = []
+        # the last year is simply dropped, i.e., all vehicles replaced
+        for i in range(dims - 1):
+            new_age_composition.append(
+                age_composition[i]
+                * (survival_rate[i + 1] / (survival_rate[i] + epsilon))
+            )
 
+        replacement_sale = sum(age_composition) - sum(new_age_composition)
+        new_age_composition.insert(0, sp.Float(0))
+
+        self.age_composition = age_composition
         self.survival_rate = survival_rate
-        self.delta_survival_rate = delta_survival_rate
 
-        breakpoint()
-
-    # sales_replacement[i] = conv(sales[i], delta_survival[i])
-    # sales_new[i] = stock[i] - stock[i - 1]
-    # delta_survival[i] = survival[i] - survival[i - 1]
-    # sales[i] = sales_new[i] + sales_replacement[i]
+        self.replacement_sale = replacement_sale
+        self.new_age_composition = new_age_composition
 
     def output(self):
-        pass
+        return {
+            "replacement_sale": self.replacement_sale,
+            "new_age_composition": self.new_age_composition,
+        }
 
 
 # Section 2.2.1: Stock and Sales
@@ -323,7 +332,3 @@ class BusStockDensityModule(Module):
             self.sigmoid_curve.beta: beta,
             self.linear.a[0]: a_0,
         }
-
-
-if __name__ == "__main__":
-    module = VehicleCompositionModule(dims=25)

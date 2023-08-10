@@ -25,6 +25,8 @@ class BaseModule(abc.ABC):
                 key: cls.subs(_value, *args, **kwargs) for key, _value in value.items()
             }
 
+        breakpoint()
+
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -35,9 +37,18 @@ class BaseModule(abc.ABC):
         if output is None:
             output = self.output()
 
-        input_by_symbol: dict[sp.Symbol, sp.Basic] = {
-            getattr(self, k): v for k, v in inputs.items()
-        }
+        input_by_symbol: dict[sp.Symbol, sp.Basic] = {}
+        for k, v in inputs.items():
+            s: sp.Symbol | Iterable = getattr(self, k)
+            if isinstance(s, Iterable):
+                if not isinstance(v, Iterable):
+                    raise ValueError(
+                        f"Argument `{k}` must be an iterable of length {len(list(s))}"
+                    )
+                for _s, _v in zip(s, v):
+                    input_by_symbol[_s] = _v
+            else:
+                input_by_symbol[s] = v
 
         return self.subs(output, input_by_symbol)
 

@@ -19,6 +19,7 @@ from absl import app, flags, logging
 
 from app.data import (
     City,
+    Fuel,
     Vehicle,
     get_income_dataframe,
     get_tsai_sec_2_2_3_data,
@@ -41,6 +42,7 @@ from app.modules import (
 )
 from app.pipelines import (
     BusStockPipeline,
+    CarCompositionPipeline,
     CarStockPipeline,
     OperatingCarStockPipeline,
     PerYearPipeline,
@@ -110,7 +112,7 @@ def vehicle_subsidy(
 def tsai_2023_sec_2_2_1_experiment(
     data_dir: Path,
     result_dir: Path,
-    plot_age_values: Iterable[float] = np.linspace(0, 30, 100),
+    plot_age_values: Iterable[float] = np.arange(0, 31, 0.1),
 ):
     logging.info("Running Tsai 2023 Section 2.2.1 experiment.")
 
@@ -183,6 +185,19 @@ def tsai_2023_sec_2_2_1_experiment(
         .layout(size=(6, 4))
         .save(Path(result_dir, "tsai-2023-sec-2-2-1.pdf"))
     )
+
+    for vehicle in [Vehicle.CAR, Vehicle.SCOOTER, Vehicle.OPERATING_CAR]:
+        vehicle_str = vehicle.value.lower()
+        _df_plot = df_plot.loc[
+            (df_plot["age"].astype(int) == df_plot["age"])
+            & (df_plot["vehicle"] == vehicle.value)
+            & (df_plot["group"] == PlotGroup.PREDICTION)
+        ].copy()
+
+        _df_plot["age"] = _df_plot["age"].astype(int)
+        _df_plot[["age", "survival_rate"]].to_csv(
+            Path(result_dir, f"tsai-2023-sec-2-2-1-{vehicle_str}.csv"), index=False
+        )
 
 
 def tsai_2023_sec_2_2_2_experiment(
@@ -681,8 +696,6 @@ def tsai_2023_sec_3_1_experiment(
     predict_years: Iterable[int] = np.arange(2022, 2051),
     plot_years: Iterable[int] = np.arange(2000, 2050),
 ):
-    logging.set_verbosity(logging.INFO)
-
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
 
     for vehicle in [
@@ -863,22 +876,120 @@ def tsai_2023_sec_3_1_experiment(
         )
 
 
+def tsai_2023_sec_3_2_experiment(
+    data_dir: Path,
+    result_dir: Path,
+    years: Iterable[int] = range(2012, 2050),
+) -> None:
+    vehicle: Vehicle = Vehicle.CAR
+    vehicle_str: str = vehicle.value.lower()
+
+    for scenario in ["REF", "BEV", "BEV_FCV"]:
+        logging.info(f"Running vehicle={vehicle} scenario={scenario}")
+
+        pipeline = CarCompositionPipeline(
+            data_dir=data_dir,
+            result_dir=result_dir,
+            scenario=scenario,
+        )
+
+        vehicle_sale_by_year: dict[int, pd.Series]
+        df_vehicle_age_composition_by_year: dict[int, pd.DataFrame]
+        vehicle_sale_by_year, df_vehicle_age_composition_by_year = pipeline(years=years)
+
+        df_vehicle_sale = pd.DataFrame.from_dict(
+            {
+                year: vehicle_sale.to_dict()
+                for year, vehicle_sale in vehicle_sale_by_year.items()
+            },
+            orient="index",
+        ).astype(int)
+        df_vehicle_sale.index.name = "year"
+        df_vehicle_sale.columns = df_vehicle_sale.columns.map(lambda x: x.value)
+
+        df_vehicle_sale_percentage = df_vehicle_sale.div(
+            df_vehicle_sale.sum(axis=1), axis=0
+        )
+
+        df_vehicle_stock = pd.DataFrame.from_dict(
+            {
+                year: df_vehicle_age_composition.sum(axis=0).to_dict()
+                for year, df_vehicle_age_composition in df_vehicle_age_composition_by_year.items()
+            },
+            orient="index",
+        ).astype(int)
+        df_vehicle_stock.index.name = "year"
+        df_vehicle_stock.columns = df_vehicle_stock.columns.map(lambda x: x.value)
+
+        df_vehicle_stock_percentage = df_vehicle_stock.div(
+            df_vehicle_stock.sum(axis=1), axis=0
+        )
+
+        for df, value_name, title in [
+            (df_vehicle_sale, "vehicle_sale", "Vehicle Sale"),
+            (
+                df_vehicle_sale_percentage,
+                "vehicle_sale_percentage",
+                "Vehicle Sale Percentage",
+            ),
+            (df_vehicle_stock, "vehicle_stock", "Vehicle Stock"),
+            (
+                df_vehicle_stock_percentage,
+                "vehicle_stock_percentage",
+                "Vehicle Stock Percentage",
+            ),
+        ]:
+            df_plot: pd.DataFrame = pd.melt(
+                df.reset_index(),
+                id_vars="year",
+                var_name="fuel",
+                value_name=value_name,
+            )
+
+            (
+                so.Plot(
+                    df_plot,
+                    x="year",
+                    y=value_name,
+                    color="fuel",
+                )
+                .add(so.Area(), so.Stack())
+                .scale(
+                    color={
+                        Fuel.INTERNAL_COMBUSTION.value: "gray",
+                        Fuel.BATTERY_ELECTRIC.value: "g",
+                        Fuel.FULL_CELL_ELECTRIC.value: "b",
+                    },
+                )
+                .limit(x=(df_plot["year"].min(), df_plot["year"].max()))
+                .label(x="Year", y=title)
+                .layout(size=(6, 4))
+                .save(
+                    Path(
+                        result_dir,
+                        f"tsai-2023-sec-3-2-{vehicle_str}-{scenario}-{value_name}.pdf",
+                    )
+                )
+            )
+
+
 def main(_):
     py_logging.getLogger("matplotlib.category").setLevel(py_logging.WARNING)
     warnings.filterwarnings("ignore", category=scipy.integrate.IntegrationWarning)
 
-    logging.set_verbosity(logging.DEBUG)
+    logging.set_verbosity(logging.INFO)
 
     Path(FLAGS.result_dir).mkdir(parents=True, exist_ok=True)
 
-    vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    # tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_3_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from app.data.core import (
     get_income_dataframe,
     get_income_series,
     get_population_series,
+    get_vehicle_age_composition_series,
     get_vehicle_market_share_series,
     get_vehicle_ownership_dataframe,
     get_vehicle_stock_adjustment_series,
@@ -25,4 +26,6 @@ from app.data.tsai_2023 import (
     get_tsai_sec_2_3_data,
     get_tsai_sec_2_4_data,
     get_tsai_sec_2_5_data,
+    get_tsai_vehicle_stock_series,
+    get_tsai_vehicle_survival_rate_series,
 )

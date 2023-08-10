@@ -9,13 +9,59 @@ from app.data.core import (
     Vehicle,
     get_city_area_series,
     get_city_population_dataframe,
+    get_column_data_fn,
     get_deflation_series,
     get_gdp_dataframe,
     get_population_series,
     get_vehicle_ownership_dataframe,
     get_vehicle_stock_adjustment_series,
     get_vehicle_stock_series,
+    get_vehicle_survival_rate_series,
 )
+
+
+def get_tsai_vehicle_survival_rate_series(
+    data_dir: Path,
+    result_dir: Path,
+    vehicle: Vehicle,
+    max_age: int = 25,
+) -> pd.Series:
+    vehicle_str: str = vehicle.value.lower()
+    _get_column_data_fn = get_column_data_fn(
+        csv_name=f"tsai-2023-sec-2-2-1-{vehicle_str}.csv",
+        index_column="age",
+        value_column="survival_rate",
+    )
+    s_result: pd.Series = _get_column_data_fn(data_dir=result_dir)
+    s_result = s_result.reindex(pd.RangeIndex(max_age + 1, name="age"), fill_value=0)
+
+    s = get_vehicle_survival_rate_series(data_dir=data_dir, vehicle=vehicle)
+
+    return pd.Series.combine_first(s_result, s)
+
+
+def get_tsai_vehicle_stock_series(
+    result_dir: Path,
+    vehicle: Vehicle,
+    percentage: float | None = None,
+) -> pd.Series:
+    vehicle_str: str = vehicle.value.lower()
+
+    df: pd.DataFrame = pd.read_csv(
+        Path(result_dir, f"tsai-2023-sec-3-1-{vehicle_str}.csv"),
+        index_col=["year", "percentage"],
+        usecols=["year", "percentage", "vehicle_stock"],
+    )
+
+    s: pd.Series
+    if percentage:
+        df = df.reset_index()
+        df = df.loc[df["percentage"] == percentage]
+        s = df.set_index("year")["vehicle_stock"]
+    else:
+        s = df["vehicle_stock"]
+
+    return s
 
 
 def get_tsai_sec_2_2_3_data(
