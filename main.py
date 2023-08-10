@@ -46,8 +46,10 @@ from app.pipelines import (
     CarStockPipeline,
     OperatingCarStockPipeline,
     PerYearPipeline,
+    ScooterCompositionPipeline,
     ScooterStockPipeline,
     TruckStockPipeline,
+    VehicleCompositionPipeline,
 )
 
 flags.DEFINE_string("data_dir", "./data", "Directory for data.")
@@ -881,17 +883,33 @@ def tsai_2023_sec_3_2_experiment(
     result_dir: Path,
     years: Iterable[int] = range(2012, 2050),
 ) -> None:
-    vehicle: Vehicle = Vehicle.CAR
-    vehicle_str: str = vehicle.value.lower()
-
-    for scenario in ["REF", "BEV", "BEV_FCV"]:
+    for vehicle, scenario in itertools.product(
+        # [Vehicle.CAR, Vehicle.SCOOTER],
+        [Vehicle.SCOOTER],
+        ["REF", "BEV", "BEV_FCV"],
+    ):
         logging.info(f"Running vehicle={vehicle} scenario={scenario}")
 
-        pipeline = CarCompositionPipeline(
-            data_dir=data_dir,
-            result_dir=result_dir,
-            scenario=scenario,
-        )
+        vehicle_str: str = vehicle.value.lower()
+
+        pipeline: VehicleCompositionPipeline
+        match vehicle:
+            case Vehicle.CAR:
+                pipeline = CarCompositionPipeline(
+                    data_dir=data_dir,
+                    result_dir=result_dir,
+                    scenario=scenario,
+                )
+
+            case Vehicle.SCOOTER:
+                pipeline = ScooterCompositionPipeline(
+                    data_dir=data_dir,
+                    result_dir=result_dir,
+                    scenario=scenario,
+                )
+
+            case _:
+                raise ValueError(f"Invalid vehicle={vehicle}")
 
         vehicle_sale_by_year: dict[int, pd.Series]
         df_vehicle_age_composition_by_year: dict[int, pd.DataFrame]

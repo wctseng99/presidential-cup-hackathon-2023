@@ -6,6 +6,8 @@ from app.pipelines.tsai_2023 import (
     CarCompositionPipeline,
     CarStockPipeline,
     OperatingCarStockPipeline,
+    ScooterCompositionPipeline,
     ScooterStockPipeline,
     TruckStockPipeline,
+    VehicleCompositionPipeline,
 )

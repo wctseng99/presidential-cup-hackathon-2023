@@ -362,8 +362,8 @@ class BusStockPipeline(PerYearPipeline):
 
 
 @dataclasses.dataclass(kw_only=True)
-class CarCompositionPipeline(object):
-    VEHICLE: ClassVar[Vehicle] = Vehicle.CAR
+class VehicleCompositionPipeline(object):
+    VEHICLE: ClassVar[Vehicle]
     FUELS: ClassVar[list[Fuel]] = [
         Fuel.INTERNAL_COMBUSTION,
         Fuel.BATTERY_ELECTRIC,
@@ -500,3 +500,13 @@ class CarCompositionPipeline(object):
             )
 
         return vehicle_sale_by_year, df_vehicle_age_composition_by_year
+
+
+@dataclasses.dataclass(kw_only=True)
+class CarCompositionPipeline(VehicleCompositionPipeline):
+    VEHICLE: ClassVar[Vehicle] = Vehicle.CAR
+
+
+@dataclasses.dataclass(kw_only=True)
+class ScooterCompositionPipeline(VehicleCompositionPipeline):
+    VEHICLE: ClassVar[Vehicle] = Vehicle.SCOOTER
