@@ -5,15 +5,21 @@
 # https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914
 
 
+import enum
 from typing import Any
 
 import sympy as sp
+import sympy.stats as sps
 
 from app.modules.base import BaseModule
 
 
 class VehicleSubsidyModule(BaseModule):
-    def __init__(self):
+    class Density(str, enum.Enum):
+        UNIFORM = "UNIFORM"
+        NORMAL = "NORMAL"
+
+    def __init__(self, density: Density = Density.NORMAL) -> None:
         d = sp.Symbol("d")
         f_e = sp.Symbol("f_e")
         f_f = sp.Symbol("f_f")
@@ -68,8 +74,14 @@ class VehicleSubsidyModule(BaseModule):
         # Equation 17
         # This is the solution to the stackelberg game, which in the paper is using `Pm_e` and
         # `Pm_f` to denote, but this is the only operating point for `P_e` and `P_f` we will use
-        P_e = sp.Piecewise((P1_e, P2_e >= k * C), (P2_e, P2_e < k * C))
-        P_f = sp.Piecewise((P1_f, P2_f >= C), (P2_f, P2_f < C))
+        P_e = sp.Piecewise(
+            (P1_e, P2_e - k * C > 0),
+            (P2_e, True),
+        )
+        P_f = sp.Piecewise(
+            (P1_f, P2_f - C > 0),
+            (P2_f, True),
+        )
 
         # Equation 8
         θ_1 = β_1 * (P_f + T * (r - S_f)) + l
@@ -78,8 +90,19 @@ class VehicleSubsidyModule(BaseModule):
         θ_2 = (β_1 * (P_e - P_f + T * (S_f - S_e + m)) + n) / ε
 
         # Equation 14
-        η_e = 1 - θ_2
-        η_f = θ_2 - θ_1
+        match density:
+            case VehicleSubsidyModule.Density.UNIFORM:
+                η_e = 1 - θ_2
+                η_f = θ_2 - θ_1
+
+            case VehicleSubsidyModule.Density.NORMAL:
+                cdf_fn = sps.cdf(sps.LogNormal("θ", -1.0, 0.4))
+
+                η_e = 1 - cdf_fn(θ_2)
+                η_f = sp.Piecewise(
+                    (cdf_fn(θ_2) - cdf_fn(θ_1), θ_2 - θ_1 > 0),
+                    (0, True),
+                )
 
         # Equation 7
         q_e = η_e * N_c
@@ -114,7 +137,7 @@ class VehicleSubsidyModule(BaseModule):
         φ = TS / (χ_e * ΔN_v)
 
         # Equation 25
-        CER = χ_e * ΔN_v * d * e / TS
+        CER = χ_e * ΔN_v * d * e
         δ = CER / TS
 
         self.d = d
@@ -230,14 +253,22 @@ class VehicleSubsidyModule(BaseModule):
         }
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
-        # find the leader solution to the stackelberg game
-        dU_G__dρ_c = super().__call__(output=sp.diff(self.U_G, self.ρ_c), **inputs)
-        ρ_c: list[sp.Basic] = sp.solve(dU_G__dρ_c, self.ρ_c)
+        ρ_c = inputs.get("ρ_c", None)
 
-        if len(ρ_c) != 1:
-            raise ValueError("Expected one solution for ρ_c")
+        if ρ_c is None:
+            # find the leader solution to the stackelberg game
+            dU_G__dρ_c = super().__call__(output=sp.diff(self.U_G, self.ρ_c), **inputs)
+            ρ_c: list[sp.Basic] = sp.solve(dU_G__dρ_c, self.ρ_c)
 
-        inputs.update({"ρ_c": ρ_c[0]})
+            # sometimes negaticaive solutions are found, remove them
+            ρ_c = [ρ_c_ for ρ_c_ in ρ_c if ρ_c_ > 0]
+
+            if len(ρ_c) != 1:
+                raise ValueError(
+                    f"Expected one solution for ρ_c, found {len(ρ_c)}: {ρ_c}"
+                )
+
+            inputs.update({"ρ_c": ρ_c[0]})
 
         # unroll the follower solutions
-        return super().__call__(**inputs)
+        return super().__call__(output=output, **inputs)

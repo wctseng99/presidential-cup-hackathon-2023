@@ -15,12 +15,18 @@ from main import (
 
 
 def test_vehicle_subsidy(data_dir: Path, result_dir: Path):
-    vehicle_subsidy(data_dir, result_dir)
+    vehicle_subsidy(
+        data_dir,
+        result_dir,
+        years=np.arange(2020, 2021),
+    )
 
 
 def test_tsai_2023_sec_2_2_1_experiment(data_dir: Path, result_dir: Path):
     tsai_2023_sec_2_2_1_experiment(
-        data_dir, result_dir, plot_age_values=np.linspace(0, 30, 2)
+        data_dir,
+        result_dir,
+        plot_age_values=np.linspace(0, 30, 2),
     )
 
 

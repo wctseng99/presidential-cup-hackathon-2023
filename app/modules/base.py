@@ -15,7 +15,7 @@ class BaseModule(abc.ABC):
     @classmethod
     def subs(cls, value: Any, *args: Any, **kwargs: Any) -> Any:
         if isinstance(value, sp.Basic):
-            return value.subs(*args, **kwargs)
+            return value.subs(*args, **kwargs).evalf()
 
         if isinstance(value, list):
             return [cls.subs(_value, *args, **kwargs) for _value in value]
@@ -24,8 +24,6 @@ class BaseModule(abc.ABC):
             return {
                 key: cls.subs(_value, *args, **kwargs) for key, _value in value.items()
             }
-
-        breakpoint()
 
         raise NotImplementedError
 

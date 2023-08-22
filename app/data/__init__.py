@@ -21,6 +21,10 @@ from app.data.core import (
     to_camel_case,
     to_snake_case,
 )
+from app.data.nie_2022 import (
+    get_electric_vehicle_sale_percentage_target_series,
+    get_nie_k_series,
+)
 from app.data.tsai_2023 import (
     get_tsai_sec_2_2_3_data,
     get_tsai_sec_2_3_data,

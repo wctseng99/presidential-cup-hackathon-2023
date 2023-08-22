@@ -1,19 +1,16 @@
 import enum
 import itertools
 import logging as py_logging
-import pprint
 import warnings
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-import graphviz as gv
 import numpy as np
 import pandas as pd
 import rich.progress as rp
 import scipy.integrate
 import seaborn.objects as so
-import sympy as sp
 import sympy.stats as sps
 from absl import app, flags, logging
 
@@ -22,6 +19,7 @@ from app.data import (
     Fuel,
     Vehicle,
     get_income_dataframe,
+    get_nie_k_series,
     get_tsai_sec_2_2_3_data,
     get_tsai_sec_2_3_data,
     get_tsai_sec_2_4_data,
@@ -68,47 +66,96 @@ class PlotGroup(int, enum.Enum):
 def vehicle_subsidy(
     data_dir: Path,
     result_dir: Path,
+    years: Iterable[int] = range(2020, 2050),
 ):
     logging.info("Running vehicle subsidy experiment.")
 
-    module = VehicleSubsidyModule()
+    vehicle: Vehicle = Vehicle.CAR
 
-    inputs: dict[str, float] = {
-        "d": 14_332,  # km/year
-        "f_e": 0.15,  # kWh/km
-        "f_f": 0.08,  # L/km
-        "ρ_e": 0.081,  # $/kWh
-        "ρ_f": 0.997,  # $/L
-        "M_e": 743,  # $/year
-        "M_f": 694,  # $/year
-        "e": 0.14,  # kg/km
-        "Q": 2_000,  # kg
-        "T": 10,  # year
-        "F_e": 6,  # h
-        "F_f": 0.0833,  # h
-        "I_e": 10,
-        "C": 25_000,  # $
-        "k": 1.16,
-        "i_e": 0,
-        "i_f": 230.75,  # $/year
-        "ε": 0.1,
-        "θ": 0.69,
-        "β_1": 1.211e-5,
-        "β_2": 0.05555,
-        "β_3": 0.01831,
-        "λ_1": 0.5,
-        "λ_2": 0.5,
-        "ΔN_v": 100_000,
-    }
+    s_k: pd.Series = get_nie_k_series(vehicle=vehicle)
 
-    output = module(**inputs)
-    logging.info(f"Output values: {pprint.pformat(output)}")
+    plot_objs: list[dict[str, Any]] = []
+    for year in years:
+        module = VehicleSubsidyModule()
 
-    dot_str: str = sp.dotprint(
-        module.E_G,
-        atom=lambda x: not isinstance(x, sp.Basic),
+        inputs: dict[str, float] = {
+            "d": 9640,  # km/year
+            "f_e": 0.1266,  # kWh/km
+            "f_f": 0.0581,  # L/km
+            "ρ_e": 2.7246,  # $/kWh
+            "ρ_f": 31.09,  # $/L
+            "M_e": 14486,  # $/year
+            "M_f": 14486,  # $/year
+            "e": 0.14,  # kg/km
+            "Q": 1_350,  # kg
+            "T": 10,  # year
+            "F_e": 6,  # h
+            "F_f": 0.0833,  # h
+            "I_e": 10,
+            "C": 750_000,  # $
+            "k": s_k[year],
+            "i_e": 0,
+            "i_f": 6922,  # $/year
+            "ε": 0.10,
+            "θ": 0.69,
+            "β_1": 1.211e-5 / 30,
+            "β_2": 0.05555,
+            "β_3": 0.01831,
+            "λ_1": 0.5,
+            "λ_2": 0.5,
+            "ΔN_v": 100_000,
+            "ρ_c": 0.889,
+        }
+
+        output = module(
+            output={"χ_f": module.χ_f, "χ_e": module.χ_e, "δ": module.δ}, **inputs
+        )
+
+        logging.info(f"Year {year}: {output}")
+
+        plot_objs.extend(
+            [
+                {
+                    "year": year,
+                    "fuel": Fuel.INTERNAL_COMBUSTION.value,
+                    "vehicle_sale_percentage": float(output["χ_f"]),
+                },
+                {
+                    "year": year,
+                    "fuel": Fuel.BATTERY_ELECTRIC.value,
+                    "vehicle_sale_percentage": float(output["χ_e"]),
+                },
+                {
+                    "year": year,
+                    "emission_reduction_unit_cost": float(output["δ"]),
+                },
+            ]
+        )
+
+    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
+    (
+        so.Plot(
+            df_plot,
+            x="year",
+            y="vehicle_sale_percentage",
+            color="fuel",
+        )
+        .add(so.Area(), so.Stack())
+        .scale(
+            color={
+                Fuel.INTERNAL_COMBUSTION.value: "gray",
+                Fuel.BATTERY_ELECTRIC.value: "g",
+                Fuel.FULL_CELL_ELECTRIC.value: "b",
+            }
+        )
+        .limit(x=(min(years), max(years)), y=(0, 1))
+        .label(
+            x="Year",
+            y="Vehicle Sales Rate",
+        )
+        .layout(size=(6, 4))
+        .save(Path(result_dir, "nie.pdf"), bbox_inches="tight")
     )
-    gv.Source(dot_str).render(Path(result_dir, "total_budget.gv"), format="png")
 
 
 def tsai_2023_sec_2_2_1_experiment(
@@ -884,8 +931,7 @@ def tsai_2023_sec_3_2_experiment(
     years: Iterable[int] = range(2012, 2050),
 ) -> None:
     for vehicle, scenario in itertools.product(
-        # [Vehicle.CAR, Vehicle.SCOOTER],
-        [Vehicle.SCOOTER],
+        [Vehicle.CAR, Vehicle.SCOOTER],
         ["REF", "BEV", "BEV_FCV"],
     ):
         logging.info(f"Running vehicle={vehicle} scenario={scenario}")
@@ -999,14 +1045,14 @@ def main(_):
 
     Path(FLAGS.result_dir).mkdir(parents=True, exist_ok=True)
 
-    # vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
-    # tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    vehicle_subsidy(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_3_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_4_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_2_5_experiment(FLAGS.data_dir, FLAGS.result_dir)
+    tsai_2023_sec_3_1_experiment(FLAGS.data_dir, FLAGS.result_dir)
     tsai_2023_sec_3_2_experiment(FLAGS.data_dir, FLAGS.result_dir)
 
 
