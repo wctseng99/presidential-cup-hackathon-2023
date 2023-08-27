@@ -372,7 +372,7 @@ class VehicleCompositionPipeline(object):
 
     data_dir: Path
     result_dir: Path
-    scenario: str
+    scenario: str = "REF"
     max_age: int = 25
 
     @functools.cached_property

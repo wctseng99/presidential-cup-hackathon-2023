@@ -63,99 +63,171 @@ class PlotGroup(int, enum.Enum):
     PREDICTION_CI_HIGH = 4
 
 
+def plot_vehicle_sale_and_stock(
+    vehicle_sale_by_year: dict[int, pd.Series],
+    df_vehicle_age_composition_by_year: dict[int, pd.DataFrame],
+    result_dir: Path,
+    prefix: str,
+):
+    df_vehicle_sale = pd.DataFrame.from_dict(
+        {
+            year: vehicle_sale.to_dict()
+            for year, vehicle_sale in vehicle_sale_by_year.items()
+        },
+        orient="index",
+    ).astype(int)
+    df_vehicle_sale.index.name = "year"
+    df_vehicle_sale.columns = df_vehicle_sale.columns.map(lambda x: x.value)
+
+    df_vehicle_sale_percentage = df_vehicle_sale.div(
+        df_vehicle_sale.sum(axis=1), axis=0
+    )
+
+    df_vehicle_stock = pd.DataFrame.from_dict(
+        {
+            year: df_vehicle_age_composition.sum(axis=0).to_dict()
+            for year, df_vehicle_age_composition in df_vehicle_age_composition_by_year.items()
+        },
+        orient="index",
+    ).astype(int)
+    df_vehicle_stock.index.name = "year"
+    df_vehicle_stock.columns = df_vehicle_stock.columns.map(lambda x: x.value)
+
+    df_vehicle_stock_percentage = df_vehicle_stock.div(
+        df_vehicle_stock.sum(axis=1), axis=0
+    )
+
+    for df, value_name, title in [
+        (df_vehicle_sale, "vehicle_sale", "Vehicle Sale"),
+        (
+            df_vehicle_sale_percentage,
+            "vehicle_sale_percentage",
+            "Vehicle Sale Percentage",
+        ),
+        (df_vehicle_stock, "vehicle_stock", "Vehicle Stock"),
+        (
+            df_vehicle_stock_percentage,
+            "vehicle_stock_percentage",
+            "Vehicle Stock Percentage",
+        ),
+    ]:
+        df_plot: pd.DataFrame = pd.melt(
+            df.reset_index(),
+            id_vars="year",
+            var_name="fuel",
+            value_name=value_name,
+        )
+
+        (
+            so.Plot(
+                df_plot,
+                x="year",
+                y=value_name,
+                color="fuel",
+            )
+            .add(so.Area(), so.Stack())
+            .scale(
+                color={
+                    Fuel.INTERNAL_COMBUSTION.value: "gray",
+                    Fuel.BATTERY_ELECTRIC.value: "g",
+                    Fuel.FULL_CELL_ELECTRIC.value: "b",
+                },
+            )
+            .limit(x=(df_plot["year"].min(), df_plot["year"].max()))
+            .label(x="Year", y=title)
+            .layout(size=(6, 4))
+            .save(Path(result_dir, f"{prefix}-{value_name}.pdf"), bbox_inches="tight")
+        )
+
+
 def vehicle_subsidy(
     data_dir: Path,
     result_dir: Path,
-    years: Iterable[int] = range(2020, 2050),
+    years: Iterable[int] = range(2012, 2051),
+    predict_years: Iterable[int] = range(2023, 2051),
 ):
     logging.info("Running vehicle subsidy experiment.")
 
-    vehicle: Vehicle = Vehicle.CAR
+    for vehicle in [Vehicle.CAR]:
+        vehicle_str: str = vehicle.value.lower()
 
-    s_k: pd.Series = get_nie_k_series(vehicle=vehicle)
+        s_k: pd.Series = get_nie_k_series(vehicle=vehicle)
 
-    plot_objs: list[dict[str, Any]] = []
-    for year in years:
-        module = VehicleSubsidyModule()
+        objs: list[dict[str, Any]] = []
+        for year in predict_years:
+            subsidy_module = VehicleSubsidyModule()
 
-        inputs: dict[str, float] = {
-            "d": 9640,  # km/year
-            "f_e": 0.1266,  # kWh/km
-            "f_f": 0.0581,  # L/km
-            "ρ_e": 2.7246,  # $/kWh
-            "ρ_f": 31.09,  # $/L
-            "M_e": 14486,  # $/year
-            "M_f": 14486,  # $/year
-            "e": 0.14,  # kg/km
-            "Q": 1_350,  # kg
-            "T": 10,  # year
-            "F_e": 6,  # h
-            "F_f": 0.0833,  # h
-            "I_e": 10,
-            "C": 750_000,  # $
-            "k": s_k[year],
-            "i_e": 0,
-            "i_f": 6922,  # $/year
-            "ε": 0.10,
-            "θ": 0.69,
-            "β_1": 1.211e-5 / 30,
-            "β_2": 0.05555,
-            "β_3": 0.01831,
-            "λ_1": 0.5,
-            "λ_2": 0.5,
-            "ΔN_v": 100_000,
-            "ρ_c": 0.889,
-        }
-
-        output = module(
-            output={"χ_f": module.χ_f, "χ_e": module.χ_e, "δ": module.δ}, **inputs
-        )
-
-        logging.info(f"Year {year}: {output}")
-
-        plot_objs.extend(
-            [
-                {
-                    "year": year,
-                    "fuel": Fuel.INTERNAL_COMBUSTION.value,
-                    "vehicle_sale_percentage": float(output["χ_f"]),
-                },
-                {
-                    "year": year,
-                    "fuel": Fuel.BATTERY_ELECTRIC.value,
-                    "vehicle_sale_percentage": float(output["χ_e"]),
-                },
-                {
-                    "year": year,
-                    "emission_reduction_unit_cost": float(output["δ"]),
-                },
-            ]
-        )
-
-    df_plot: pd.DataFrame = pd.DataFrame(plot_objs)
-    (
-        so.Plot(
-            df_plot,
-            x="year",
-            y="vehicle_sale_percentage",
-            color="fuel",
-        )
-        .add(so.Area(), so.Stack())
-        .scale(
-            color={
-                Fuel.INTERNAL_COMBUSTION.value: "gray",
-                Fuel.BATTERY_ELECTRIC.value: "g",
-                Fuel.FULL_CELL_ELECTRIC.value: "b",
+            inputs: dict[str, float] = {
+                "d": 9640,  # km/year
+                "f_e": 0.1266,  # kWh/km
+                "f_f": 0.0581,  # L/km
+                "ρ_e": 2.7246,  # $/kWh
+                "ρ_f": 31.09,  # $/L
+                "M_e": 14486,  # $/year
+                "M_f": 14486,  # $/year
+                "e": 0.14,  # kg/km
+                "Q": 1_350,  # kg
+                "T": 10,  # year
+                "F_e": 6,  # h
+                "F_f": 0.0833,  # h
+                "I_e": 10,
+                "C": 750_000,  # $
+                "k": s_k[year],
+                "i_e": 0,
+                "i_f": 6922,  # $/year
+                "ε": 0.10,
+                "θ": 0.69,
+                "β_1": 1.211e-5 / 30,
+                "β_2": 0.05555,
+                "β_3": 0.01831,
+                "λ_1": 0.5,
+                "λ_2": 0.5,
+                "ΔN_v": 100_000,
+                "ρ_c": 0.889,
             }
+
+            output = subsidy_module(
+                output={
+                    "χ_f": subsidy_module.χ_f,
+                    "χ_e": subsidy_module.χ_e,
+                },
+                **inputs,
+            )
+
+            logging.info(f"Year {year}: {output}")
+
+            objs.append({"year": year} | output)
+
+        df_vehicle_subsidy = pd.DataFrame(objs).set_index("year")
+        df_vehicle_market_share_predicted: pd.DataFrame = pd.DataFrame(
+            {
+                Fuel.INTERNAL_COMBUSTION: df_vehicle_subsidy["χ_f"],
+                Fuel.BATTERY_ELECTRIC: df_vehicle_subsidy["χ_e"],
+                Fuel.FULL_CELL_ELECTRIC: 0.0,
+            },
+            index=df_vehicle_subsidy.index,
         )
-        .limit(x=(min(years), max(years)), y=(0, 1))
-        .label(
-            x="Year",
-            y="Vehicle Sales Rate",
+
+        pipeline = CarCompositionPipeline(
+            data_dir=data_dir,
+            result_dir=result_dir,
         )
-        .layout(size=(6, 4))
-        .save(Path(result_dir, "nie.pdf"), bbox_inches="tight")
-    )
+        df_vehicle_market_share: pd.DataFrame = (
+            df_vehicle_market_share_predicted.combine_first(
+                pipeline.df_vehicle_market_share
+            )
+        )
+        vehicle_sale_by_year, df_vehicle_age_composition_by_year = pipeline(
+            years=years,
+            df_vehicle_market_share=df_vehicle_market_share,
+        )
+
+        plot_vehicle_sale_and_stock(
+            vehicle_sale_by_year=vehicle_sale_by_year,
+            df_vehicle_age_composition_by_year=df_vehicle_age_composition_by_year,
+            result_dir=result_dir,
+            prefix=f"{vehicle_str}-REF",
+        )
 
 
 def tsai_2023_sec_2_2_1_experiment(
@@ -743,7 +815,7 @@ def tsai_2023_sec_3_1_experiment(
     integrate_sigma: float = 64,
     quantiles: Iterable[float] = np.arange(0, 1.001, 0.025),
     predict_years: Iterable[int] = np.arange(2022, 2051),
-    plot_years: Iterable[int] = np.arange(2000, 2050),
+    plot_years: Iterable[int] = np.arange(2000, 2051),
 ):
     logging.info("Running Tsai 2023 Section 3.1 experiment.")
 
@@ -928,7 +1000,7 @@ def tsai_2023_sec_3_1_experiment(
 def tsai_2023_sec_3_2_experiment(
     data_dir: Path,
     result_dir: Path,
-    years: Iterable[int] = range(2012, 2050),
+    years: Iterable[int] = range(2012, 2051),
 ) -> None:
     for vehicle, scenario in itertools.product(
         [Vehicle.CAR, Vehicle.SCOOTER],
@@ -961,80 +1033,12 @@ def tsai_2023_sec_3_2_experiment(
         df_vehicle_age_composition_by_year: dict[int, pd.DataFrame]
         vehicle_sale_by_year, df_vehicle_age_composition_by_year = pipeline(years=years)
 
-        df_vehicle_sale = pd.DataFrame.from_dict(
-            {
-                year: vehicle_sale.to_dict()
-                for year, vehicle_sale in vehicle_sale_by_year.items()
-            },
-            orient="index",
-        ).astype(int)
-        df_vehicle_sale.index.name = "year"
-        df_vehicle_sale.columns = df_vehicle_sale.columns.map(lambda x: x.value)
-
-        df_vehicle_sale_percentage = df_vehicle_sale.div(
-            df_vehicle_sale.sum(axis=1), axis=0
+        plot_vehicle_sale_and_stock(
+            vehicle_sale_by_year=vehicle_sale_by_year,
+            df_vehicle_age_composition_by_year=df_vehicle_age_composition_by_year,
+            result_dir=result_dir,
+            prefix=f"tsai-2023-sec-3-2-{vehicle_str}-{scenario}",
         )
-
-        df_vehicle_stock = pd.DataFrame.from_dict(
-            {
-                year: df_vehicle_age_composition.sum(axis=0).to_dict()
-                for year, df_vehicle_age_composition in df_vehicle_age_composition_by_year.items()
-            },
-            orient="index",
-        ).astype(int)
-        df_vehicle_stock.index.name = "year"
-        df_vehicle_stock.columns = df_vehicle_stock.columns.map(lambda x: x.value)
-
-        df_vehicle_stock_percentage = df_vehicle_stock.div(
-            df_vehicle_stock.sum(axis=1), axis=0
-        )
-
-        for df, value_name, title in [
-            (df_vehicle_sale, "vehicle_sale", "Vehicle Sale"),
-            (
-                df_vehicle_sale_percentage,
-                "vehicle_sale_percentage",
-                "Vehicle Sale Percentage",
-            ),
-            (df_vehicle_stock, "vehicle_stock", "Vehicle Stock"),
-            (
-                df_vehicle_stock_percentage,
-                "vehicle_stock_percentage",
-                "Vehicle Stock Percentage",
-            ),
-        ]:
-            df_plot: pd.DataFrame = pd.melt(
-                df.reset_index(),
-                id_vars="year",
-                var_name="fuel",
-                value_name=value_name,
-            )
-
-            (
-                so.Plot(
-                    df_plot,
-                    x="year",
-                    y=value_name,
-                    color="fuel",
-                )
-                .add(so.Area(), so.Stack())
-                .scale(
-                    color={
-                        Fuel.INTERNAL_COMBUSTION.value: "gray",
-                        Fuel.BATTERY_ELECTRIC.value: "g",
-                        Fuel.FULL_CELL_ELECTRIC.value: "b",
-                    },
-                )
-                .limit(x=(df_plot["year"].min(), df_plot["year"].max()))
-                .label(x="Year", y=title)
-                .layout(size=(6, 4))
-                .save(
-                    Path(
-                        result_dir,
-                        f"tsai-2023-sec-3-2-{vehicle_str}-{scenario}-{value_name}.pdf",
-                    )
-                )
-            )
 
 
 def main(_):

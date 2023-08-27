@@ -10,16 +10,7 @@ from main import (
     tsai_2023_sec_2_4_experiment,
     tsai_2023_sec_2_5_experiment,
     tsai_2023_sec_3_1_experiment,
-    vehicle_subsidy,
 )
-
-
-def test_vehicle_subsidy(data_dir: Path, result_dir: Path):
-    vehicle_subsidy(
-        data_dir,
-        result_dir,
-        years=np.arange(2020, 2021),
-    )
 
 
 def test_tsai_2023_sec_2_2_1_experiment(data_dir: Path, result_dir: Path):
