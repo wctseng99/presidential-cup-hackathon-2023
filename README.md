@@ -10,7 +10,7 @@ This repository contains the code for the Presidential Cup 2023 implementations.
 
 ```bash
 # Clone the repository
-$ git clone git@github.com:CodeGreen-Labs/presidential-cup-2023.git && cd presidential-cup-2023
+$ git clone git@github.com:wctseng99/presidential-cup-hackathon-2023.git && cd presidential-cup-hackathon-2023
 # Install dependencies
 $ poetry shell && poetry install
 ```
