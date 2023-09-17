@@ -9,6 +9,8 @@ import scipy.optimize
 from absl import logging
 
 
+# This script reads and processes the data needed for simulating.
+
 class Vehicle(str, enum.Enum):
     CAR = "CAR"
     SCOOTER = "SCOOTER"

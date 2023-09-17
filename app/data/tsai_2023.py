@@ -19,6 +19,7 @@ from app.data.core import (
     get_vehicle_survival_rate_series,
 )
 
+# This script processes the data of Tsai(2023) paper based on the information from core.py.
 
 def get_tsai_vehicle_survival_rate_series(
     data_dir: Path,
