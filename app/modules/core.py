@@ -10,7 +10,10 @@ from absl import logging
 
 from app.modules.base import Module
 
+# The following classes define different mathematical modules used for modeling and fitting specific curve types.
 
+
+# LinearModule Models a linear relationship between input variables.
 class LinearModule(Module):
     def __init__(self, input_dims: int = 1, bias: bool = True):
         x = sp.symarray("x", input_dims)
@@ -35,12 +38,14 @@ class LinearModule(Module):
         self.y = y
 
     def output(self) -> dict[str, sp.Basic]:
+        # Returns the output variables, including coefficients 'a' and bias 'b'.
         return {f"a_{d}": self.a[d] for d in range(self.input_dims)} | {
             "b": self.b,
             "y": self.y,
         }
 
     def _fit(self, X: np.ndarray, y: np.ndarray, **kwargs: Any) -> dict[sp.Basic, float]:  # type: ignore
+        # Fits the LinearModule to input data and returns fitted parameters.
         (num_samples, input_dims) = X.shape
         if input_dims != self.input_dims:
             raise ValueError(f"Expected {self.input_dims} inputs, but got {input_dims}")
@@ -65,6 +70,7 @@ class LinearModule(Module):
         return {self.a[d]: a[d] for d in range(self.input_dims)} | {self.b: b}
 
 
+# SigmoidCurveModule models a sigmoid curve.
 class SigmoidCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
@@ -103,6 +109,7 @@ class SigmoidCurveModule(Module):
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
 
+# GompertzCurveModule models a Gompertz curve.
 class GompertzCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")
@@ -141,6 +148,7 @@ class GompertzCurveModule(Module):
         return {self.gamma: gamma, self.alpha: alpha, self.beta: beta}
 
 
+# GammaCurveModule models a gamma distribution curve.
 class GammaCurveModule(Module):
     def __init__(self):
         x = sp.Symbol("x")

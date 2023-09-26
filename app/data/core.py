@@ -69,7 +69,7 @@ def to_snake_case(s: str, upper: bool = True) -> str:
 def linear_fn(v: float, a: float, b: float) -> float:
     return a + b * v
 
-
+# This function returns an extrapolated Pandas Series based on the specified method.
 def extrapolate_series(
     s: pd.Series,
     index: pd.Index,
@@ -105,7 +105,8 @@ def extrapolate_series(
     assert s_extrapolated is not None
     return s_extrapolated
 
-
+# This function generates a data loading function, get_column_data, which retrieves and optionally 
+# extrapolates data from a specified CSV or Excel file, focusing on a specific column of interest.
 def get_column_data_fn(
     csv_name: str,
     index_column: str,
@@ -115,6 +116,7 @@ def get_column_data_fn(
     extrapolate_method: Callable | str = linear_fn,
     available_value_columns: Iterable[str] | None = None,
 ) -> Callable[..., pd.Series]:
+    # Define the inner function for loading and processing data
     def get_column_data(
         data_dir: Path,
         # in some cases, we want to load other columns other than the default `value_column`

@@ -9,9 +9,13 @@ import numpy as np
 import sympy as sp
 from absl import logging
 
+# The following classes are used to define a modular and extensible framework for mathematical modeling and simulations.
 
+
+# BaseModule is an abstract base class that serves as the foundation for all modules in the framework.
 @dataclasses.dataclass(kw_only=True)  # type: ignore
 class BaseModule(abc.ABC):
+    # This class provides methods for substituting values in mathematical expressions and abstract methods for output computation.
     @classmethod
     def subs(cls, value: Any, *args: Any, **kwargs: Any) -> Any:
         if isinstance(value, sp.Basic):
@@ -51,12 +55,14 @@ class BaseModule(abc.ABC):
         return self.subs(output, input_by_symbol)
 
 
+# Module is a concrete implementation of a mathematical module with fitting capabilities.
 @dataclasses.dataclass(kw_only=True)  # type: ignore
 class Module(BaseModule):
     param_by_symbol: dict[sp.Basic, float] | None = None
 
     @property
     def is_fitted(self) -> bool:
+        # Checks whether the module has been fitted with parameters.
         return self.param_by_symbol is not None
 
     @abc.abstractmethod
@@ -64,6 +70,7 @@ class Module(BaseModule):
         ...
 
     def fit(self, bootstrap: bool = True, *args: Any, **kwargs: Any) -> None:
+        # Fits the module to data, optionally using bootstrapping for uncertainty estimation.
         sampled_index: np.ndarray | None = None
 
         if bootstrap:
@@ -109,14 +116,17 @@ class Module(BaseModule):
         return self.subs(output, input_by_symbol | self.param_by_symbol)
 
 
+# BootstrapModule is a variant of Module that enables bootstrapping for uncertainty analysis.
 @dataclasses.dataclass(kw_only=True)
 class BootstrapModule(Module):
+    # This class extends Module to provide bootstrapping capabilities for uncertainty analysis.
     module: Module
     runs: int = 100
     param_by_symbol_list: list[dict[sp.Basic, float]] | None = None
 
     @property
     def is_fitted(self) -> bool:
+        # Checks whether the module has been fitted with parameter lists for bootstrapping.
         return self.param_by_symbol_list is not None
 
     def output(self) -> Any:
@@ -160,6 +170,7 @@ class BootstrapModule(Module):
         raise NotImplementedError  # TODO
 
     def _fit(self, *args: Any, **kwargs: Any) -> list[dict[sp.Basic, float]]:  # type: ignore
+        # Performs bootstrapping iterations and returns a list of parameter dictionaries.
         param_by_symbol_list = []
         for run in range(self.runs):
             logging.debug(f"Bootstrap iteration {run + 1}")
@@ -173,4 +184,5 @@ class BootstrapModule(Module):
         return param_by_symbol_list
 
     def fit(self, *args: Any, **kwargs: Any) -> None:
+        # Fits the module with bootstrapping and stores the parameter lists.
         self.param_by_symbol_list = self._fit(*args, **kwargs)
