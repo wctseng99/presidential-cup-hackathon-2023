@@ -18,7 +18,10 @@ class VehicleSubsidyModule(BaseModule):
     class Density(str, enum.Enum):
         UNIFORM = "UNIFORM"
         NORMAL = "NORMAL"
-
+        
+    # `__init__` is a special method used to initialize new instances of the VehicleSubsidyModule class.
+    # If no value for `density` is provided when creating a new object, its default value will be `Density.NORMAL`.
+    
     def __init__(self, density: Density = Density.NORMAL) -> None:
         d = sp.Symbol("d")
         f_e = sp.Symbol("f_e")
@@ -76,11 +79,11 @@ class VehicleSubsidyModule(BaseModule):
         # `Pm_f` to denote, but this is the only operating point for `P_e` and `P_f` we will use
         P_e = sp.Piecewise(
             (P1_e, P2_e - k * C > 0),
-            (P2_e, True),
+            (P2_e, True), #P2_e - k * C < 0
         )
         P_f = sp.Piecewise(
             (P1_f, P2_f - C > 0),
-            (P2_f, True),
+            (P2_f, True), #P2_f - C < 0
         )
 
         # Equation 8
@@ -89,13 +92,18 @@ class VehicleSubsidyModule(BaseModule):
         # Equation 9
         θ_2 = (β_1 * (P_e - P_f + T * (S_f - S_e + m)) + n) / ε
 
+        # Section 3.2. Solution of stackelberg equilibrium
         # Equation 14
+        # Using the `match` statement to handle different values of the `density` variable
         match density:
+            # Branch for the scenario where the density parameter is set to 'UNIFORM'
             case VehicleSubsidyModule.Density.UNIFORM:
                 η_e = 1 - θ_2
                 η_f = θ_2 - θ_1
-
+            # Branch for the scenario where the density parameter is set to 'NORMAL'
             case VehicleSubsidyModule.Density.NORMAL:
+                # Creating a Cumulative Distribution Function (CDF) using a LogNormal distribution,
+                # where the logarithmically transformed values have a mean of -1.0 and a standard deviation of 0.4
                 cdf_fn = sps.cdf(sps.LogNormal("θ", -1.0, 0.4))
 
                 η_e = 1 - cdf_fn(θ_2)
@@ -139,6 +147,10 @@ class VehicleSubsidyModule(BaseModule):
         # Equation 25
         CER = χ_e * ΔN_v * d * e
         δ = CER / TS
+
+        # `self` represents the instance of the class and is used to access its attributes and methods.
+        # For example, `self.d = d` stores the value of the local variable `d` into the instance's `d` attribute.
+        # This ensures that the value of `d` can be accessed and manipulated throughout the instance's lifetime using `self.d`.
 
         self.d = d
         self.f_e = f_e
@@ -198,6 +210,9 @@ class VehicleSubsidyModule(BaseModule):
         self.CER = CER
         self.δ = δ
 
+
+    # 'output' is designed to return a dictionary, the values are of type 'sp.Basic'
+
     def output(self) -> dict[str, sp.Basic]:
         return {
             "ρ_c": self.ρ_c,
@@ -253,22 +268,37 @@ class VehicleSubsidyModule(BaseModule):
         }
 
     def __call__(self, output: Any = None, **inputs: sp.Basic) -> Any:
+        # Extract ρ_c from the inputs; if not present, default to None.
         ρ_c = inputs.get("ρ_c", None)
 
+        # If ρ_c is not provided in the inputs, we'll need to compute it.
         if ρ_c is None:
-            # find the leader solution to the stackelberg game
+            
+            # This suggests that the function represents a leader-follower game, often termed as Stackelberg game. 
+            # The leader (in this case, the government) makes the first move, and the follower reacts accordingly.
+            # Calculate the derivative of U_G with respect to ρ_c. This derivative represents 
+            # how the utility of the government (U_G) changes with respect to ρ_c.
+
+            # Section 3.2. Solution of stackelberg equilibrium, yield the optimal government subsidy price
             dU_G__dρ_c = super().__call__(output=sp.diff(self.U_G, self.ρ_c), **inputs)
+            
+            # Solve for ρ_c such that the derivative is zero. These points (ρ_c values) represent potential 
+            # maxima or minima for the government's utility.
+            
             ρ_c: list[sp.Basic] = sp.solve(dU_G__dρ_c, self.ρ_c)
 
-            # sometimes negaticaive solutions are found, remove them
+            # Filter out any negative solutions for ρ_c, as they might be non-feasible in this context.
             ρ_c = [ρ_c_ for ρ_c_ in ρ_c if ρ_c_ > 0]
 
+            # Check if there's exactly one feasible solution for ρ_c. 
+            # If not, raise an error because the model expects a unique solution.
             if len(ρ_c) != 1:
                 raise ValueError(
                     f"Expected one solution for ρ_c, found {len(ρ_c)}: {ρ_c}"
                 )
-
+            # Update the inputs with the calculated value of ρ_c.
             inputs.update({"ρ_c": ρ_c[0]})
 
+        # This might involve evaluating some other functions or equations that are defined in the parent class.
         # unroll the follower solutions
         return super().__call__(output=output, **inputs)
