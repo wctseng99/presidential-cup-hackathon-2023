@@ -2,7 +2,8 @@ import pandas as pd
 
 from app.data.core import Vehicle
 
-
+# Using pattern matching to determine the appropriate set of k values based on the vehicle type.
+# k values means the ratio of production cost of EV to FV
 def get_nie_k_series(vehicle: Vehicle) -> pd.Series:
     match vehicle:
         case Vehicle.CAR:
@@ -39,6 +40,7 @@ def get_nie_k_series(vehicle: Vehicle) -> pd.Series:
                 2049: 0.627,
                 2050: 0.61,
             }
+        # For any other vehicle type: Raise an error indicating the given vehicle type is not supported.
         case _:
             raise ValueError(f"Invalid vehicle: {vehicle}")
 
@@ -46,7 +48,7 @@ def get_nie_k_series(vehicle: Vehicle) -> pd.Series:
 
     return s
 
-
+# Using pattern matching to determine the target percentage for electric vehicle sales based on the vehicle type.
 def get_electric_vehicle_sale_percentage_target_series(vehicle: Vehicle) -> pd.Series:
     match vehicle:
         case Vehicle.CAR:
