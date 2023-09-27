@@ -26,10 +26,10 @@ $ python main.py
 
 ## References
 Nie, Qingyun, Lihui Zhang, and Songrui Li.
-[How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles. Applied Energy 313 (2022): 118855.](https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914)
+[How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles.](https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914) Applied Energy 313 (2022): 118855.
 
 Tsai, Chia-Yu, Tsung-Heng Chang, and I-Yun Lisa Hsieh.
-[Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport. Transportation Research Part D: Transport and Environment 114 (2023): 103542.](https://www.sciencedirect.com/science/article/pii/S1361920922003686)
+[Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport.](https://www.sciencedirect.com/science/article/pii/S1361920922003686) Transportation Research Part D: Transport and Environment 114 (2023): 103542.
 
 ## Libraries
 
