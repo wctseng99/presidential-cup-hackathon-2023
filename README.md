@@ -1,6 +1,6 @@
 # CodeGreen Monorepo for Presidential Cup 2023
 
-This repository contains the code for the Presidential Cup 2023 implementations.
+This repository contains the code for the [Presidential Cup 2023 implementations](https://drive.google.com/drive/folders/1N6BmysFX87uxfQ4h3tGMTNv7paUDfCUa?usp=share_link).
 
 ## Prerequisites
 
