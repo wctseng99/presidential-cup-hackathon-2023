@@ -188,8 +188,8 @@ def vehicle_subsidy(
 
             output = subsidy_module(
                 output={
-                    "χ_f": subsidy_module.χ_f,
-                    "χ_e": subsidy_module.χ_e,
+                    "χ_f": subsidy_module.χ_f, # Vehicle market demand rate
+                    "χ_e": subsidy_module.χ_e, # Vehicle market demand rate
                 },
                 **inputs,
             )
@@ -197,8 +197,11 @@ def vehicle_subsidy(
             logging.info(f"Year {year}: {output}")
 
             objs.append({"year": year} | output)
-
+        
         df_vehicle_subsidy = pd.DataFrame(objs).set_index("year")
+
+        # Based on result to predict Vehicle Market Demand rate
+        
         df_vehicle_market_share_predicted: pd.DataFrame = pd.DataFrame(
             {
                 Fuel.INTERNAL_COMBUSTION: df_vehicle_subsidy["χ_f"],
@@ -212,11 +215,17 @@ def vehicle_subsidy(
             data_dir=data_dir,
             result_dir=result_dir,
         )
+
+        # Calculate Vehicle Market Demand rate
+        
         df_vehicle_market_share: pd.DataFrame = (
             df_vehicle_market_share_predicted.combine_first(
                 pipeline.df_vehicle_market_share
             )
         )
+
+        # Calculate Vehicle Sale & Age composition by year
+        
         vehicle_sale_by_year, df_vehicle_age_composition_by_year = pipeline(
             years=years,
             df_vehicle_market_share=df_vehicle_market_share,
