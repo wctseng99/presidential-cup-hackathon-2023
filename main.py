@@ -225,6 +225,7 @@ def vehicle_subsidy(
         )
 
         # Calculate Vehicle Sale & Age composition by year
+        # Output combined to tsai_2023_sec_3_2_experiment
         
         vehicle_sale_by_year, df_vehicle_age_composition_by_year = pipeline(
             years=years,
