@@ -28,6 +28,11 @@ $ python main.py
 Nie, Qingyun, Lihui Zhang, and Songrui Li.
 [How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles.](https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914) Applied Energy 313 (2022): 118855.
 
+### Output
+- The **main.py** def vehucle_subsidy's output are about Vehicle Market Demand rate **χ_f** and **χ_e**.
+- Use df_vehicle_market_share_predicted to calculate Vehile Market share and save the vehicle_market_share through pipeline.
+- def tsai_2023_sec_3_2_experiment uses **vehicle_sale_by_year, df_vehicle_age_composition_by_year** from def vehicle_subsidy
+
 Tsai, Chia-Yu, Tsung-Heng Chang, and I-Yun Lisa Hsieh.
 [Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport.](https://www.sciencedirect.com/science/article/pii/S1361920922003686) Transportation Research Part D: Transport and Environment 114 (2023): 103542.
 
