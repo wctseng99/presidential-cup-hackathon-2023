@@ -21,6 +21,14 @@ $ poetry shell && poetry install
 $ python main.py
 ```
 
+## References
+
+Nie, Qingyun, Lihui Zhang, and Songrui Li.
+[How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles.](https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914) Applied Energy 313 (2022): 118855.
+
+Tsai, Chia-Yu, Tsung-Heng Chang, and I-Yun Lisa Hsieh.
+[Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport.](https://www.sciencedirect.com/science/article/pii/S1361920922003686) Transportation Research Part D: Transport and Environment 114 (2023): 103542.
+
 ## Descriptions
 
 ### The structure of the repository.
@@ -34,14 +42,6 @@ $ python main.py
 - In **main.py**, the **vehicle_subsidy** module produces outputs related to the Vehicle Market Demand Rates, specifically **χ_f** and **χ_e**.
 - The **df_vehicle_market_share_predicted** is used to compute the Vehicle Market Share, and the results are stored in **vehicle_market_share** via the pipeline.
 - The **tsai_2023_sec_3_2_experiment** module utilizes **vehicle_sale_by_year** and **df_vehicle_age_composition_by_year** from the **vehicle_subsidy** module.
-
-## References
-
-Nie, Qingyun, Lihui Zhang, and Songrui Li.
-[How can personal carbon trading be applied in electric vehicle subsidies? A Stackelberg game method in private vehicles.](https://www.sciencedirect.com/science/article/abs/pii/S0306261922002914) Applied Energy 313 (2022): 118855.
-
-Tsai, Chia-Yu, Tsung-Heng Chang, and I-Yun Lisa Hsieh.
-[Evaluating vehicle fleet electrification against net-zero targets in scooter-dominated road transport.](https://www.sciencedirect.com/science/article/pii/S1361920922003686) Transportation Research Part D: Transport and Environment 114 (2023): 103542.
 
 ## Libraries
 
