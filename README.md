@@ -20,6 +20,11 @@ $ poetry shell && poetry install
 ```bash
 $ python main.py
 ```
+
+## Descriptions
+
+### The structure of the repository.
+
 - The **data** folder is specifically dedicated to the extraction, organization, extrapolation, and output of data required for computational purposes.
 - The **module** folder is responsible for constructing simulation models used in experiments.
 - The **pipelines** folder serves to connect the data and model pipelines required during simulations.
