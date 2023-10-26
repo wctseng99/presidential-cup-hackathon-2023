@@ -2,6 +2,8 @@
 
 This repository contains the code for the [Presidential Cup 2023 implementations](https://drive.google.com/drive/folders/1N6BmysFX87uxfQ4h3tGMTNv7paUDfCUa?usp=share_link).  
 
+![project cover](cover.png)
+
 In this project, we have designed a transportation and energy carbon reduction strategy system that addresses several questions related to electric vehicles in Taiwan: 
 1. What is the impact of switching to electric vehicles on carbon reduction?
 2. Can the goal of complete electrification of transportation by 2040 be achieved? 
